@@ -45,16 +45,23 @@ project-local Gradle Wrapper is committed.
 Recording is planned around explicit start/stop commands:
 
 ```text
-/data start
-/data stop
+/daq start
+/daq stop
+/daq status
 ```
 
-`/data start` creates a new anonymous session id. The id should be generated
-from a random value plus the current timestamp, then hashed with SHA-256.
-Participant ids can be assigned later during analysis and do not need to be
-stored directly by the mod.
+`/daq start` creates a new anonymous session id. The id is generated from a
+random UUID plus current wall-clock and monotonic timestamps, then hashed with
+SHA-256. Participant ids can be assigned later during analysis and do not need
+to be stored directly by the mod.
 
-`/data stop` should flush and close the active CSV file.
+`/daq stop` flushes and closes the active CSV file.
+
+Recordings are written below the game directory:
+
+```text
+minecraft-daq/mining-<utc-time>-<session-prefix>.csv
+```
 
 Long recordings should use incremental writes. The implementation should keep a
 small in-memory ring buffer for recent samples and only export samples belonging

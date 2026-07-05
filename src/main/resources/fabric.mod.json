@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "minecraft_daq",
+  "version": "${version}",
+  "name": "Minecraft DAQ",
+  "description": "Data acquisition utilities for Minecraft movement and interaction research.",
+  "authors": [
+    "Philogex"
+  ],
+  "contact": {
+    "sources": "https://github.com/Philogex/Minecraft-DAQ"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.philogex.minecraftdaq.MinecraftDaqClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "${minecraft_version}",
+    "fabric-api": "*"
+  }
+}

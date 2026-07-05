@@ -45,6 +45,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     needs: verify
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -75,12 +77,32 @@ jobs:
       - name: Build
         run: ./gradlew build --no-daemon
 
+      - name: Select mod JAR
+        id: artifact
+        shell: bash
+        run: |
+          jar_path="$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' | sort | head -n 1)"
+          if [[ -z "$jar_path" ]]; then
+            echo "No mod JAR found in build/libs" >&2
+            exit 1
+          fi
+          echo "jar_path=$jar_path" >> "$GITHUB_OUTPUT"
+
       - name: Upload mod artifacts
         uses: actions/upload-artifact@v6
         with:
           name: minecraft-daq-${{ steps.release.outputs.tag }}
-          path: |
-            build/libs/*.jar
-            !build/libs/*-sources.jar
+          path: ${{ steps.artifact.outputs.jar_path }}
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="${{ steps.release.outputs.tag }}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --notes "Minecraft DAQ $tag"
+          fi
+          gh release upload "$tag" "${{ steps.artifact.outputs.jar_path }}" --clobber

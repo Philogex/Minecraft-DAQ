@@ -20,17 +20,25 @@ The mod uses Fabric Loom and keeps all version pins in `gradle.properties`.
 ./gradlew build
 ```
 
-If the Gradle wrapper has not been generated yet, use a local Gradle
-installation once:
+The initial target version is Minecraft `26.2` with Fabric Loader `0.19.3`.
+If a test instance uses a different version, change `minecraft_version` and
+`loader_version` in `gradle.properties`.
 
-```bash
-gradle wrapper
-./gradlew build
-```
+Minecraft `26.1` and newer are shipped unobfuscated. The build therefore uses
+the `net.fabricmc.fabric-loom` plugin id for non-obfuscated Minecraft versions
+and does not declare a separate `mappings` dependency.
 
-The initial target version is Minecraft `26.2` with Fabric Loader `0.19.2`.
-If a test instance still uses `26.1.2`, change `minecraft_version`,
-`fabric_api_version`, and possibly `loom_version` in `gradle.properties`.
+## CI
+
+GitHub Actions verifies the project on pushes, pull requests, and manual
+workflow runs. The workflow is defined in `.github/workflows/build.yml`.
+
+Release artifacts are built only for tags matching `vX.X.X`, for example
+`v0.1.0`. Tagged builds upload the generated JAR files from `build/libs/` as a
+short-lived artifact.
+
+The CI path uses `gradle/actions/setup-gradle` to provide Gradle even before a
+project-local Gradle Wrapper is committed.
 
 ## Data Model
 

@@ -66,11 +66,15 @@ public final class DaqCommands {
                 "Minecraft DAQ recording stopped: " + summary.outputPath()
             ));
             MinecraftDaqClient.LOGGER.info(
-                "Recording stopped: session={} path={} events={} samples={}",
+                "Recording stopped: session={} path={} events={} samples={} ticks={} frames={} buffered={}/{}",
                 summary.sessionId(),
                 summary.outputPath(),
                 summary.eventCount(),
-                summary.sampleCount()
+                summary.sampleCount(),
+                summary.tickSampleCount(),
+                summary.frameSampleCount(),
+                summary.bufferedSampleCount(),
+                summary.bufferCapacity()
             );
             return 1;
         } catch (IOException exception) {
@@ -93,6 +97,9 @@ public final class DaqCommands {
 
         source.sendFeedback(Component.literal(
             "Minecraft DAQ recording: " + session.outputPath()
+                + " samples=" + session.sampleCount()
+                + " ticks=" + session.tickSampleCount()
+                + " frames=" + session.frameSampleCount()
         ));
         return 1;
     }

@@ -67,6 +67,10 @@ Long recordings should use incremental writes. The implementation should keep a
 small in-memory ring buffer for recent samples and only export samples belonging
 to completed mining events.
 
+The current sampling layer records into an in-memory ring buffer while a
+session is active. `/daq status` reports total, tick, and frame sample counts so
+the sampling hooks can be verified in-game before event export is added.
+
 ## Mining Dataset
 
 The mining dataset is event-based. A mining event is created when the block

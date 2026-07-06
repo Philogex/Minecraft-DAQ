@@ -16,6 +16,7 @@ import java.util.UUID;
 
 public final class DaqRecorder {
     private static final int SCHEMA_VERSION = 1;
+    private static final int RING_BUFFER_CAPACITY = 8192;
     private static final DateTimeFormatter FILE_TIME_FORMAT =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
     private static final String CSV_HEADER = String.join(
@@ -50,6 +51,7 @@ public final class DaqRecorder {
     );
 
     private final Path outputDirectory;
+    private final SampleRingBuffer samples = new SampleRingBuffer(RING_BUFFER_CAPACITY);
     private RecordingSession activeSession;
 
     public DaqRecorder(Path gameDirectory) {
@@ -75,6 +77,7 @@ public final class DaqRecorder {
         writer.newLine();
         writer.flush();
 
+        samples.clear();
         activeSession = new RecordingSession(
             sessionId,
             startedAt,
@@ -100,12 +103,28 @@ public final class DaqRecorder {
             session.startedAt(),
             Instant.now(),
             session.eventCount(),
-            session.sampleCount()
+            session.sampleCount(),
+            session.tickSampleCount(),
+            session.frameSampleCount(),
+            samples.size(),
+            samples.capacity()
         );
     }
 
     public synchronized RecordingSession activeSession() {
         return activeSession;
+    }
+
+    public synchronized boolean isRecording() {
+        return activeSession != null;
+    }
+
+    public synchronized void recordSample(RecordingSample sample) {
+        if (activeSession == null) {
+            return;
+        }
+        samples.add(sample);
+        activeSession.recordSample(sample.source());
     }
 
     public Path outputDirectory() {
@@ -126,15 +145,17 @@ public final class DaqRecorder {
         }
     }
 
-    public record RecordingSession(
-        String sessionId,
-        Instant startedAt,
-        long startedAtNs,
-        Path outputPath,
-        BufferedWriter writer,
-        long eventCount,
-        long sampleCount
-    ) {
+    public static final class RecordingSession {
+        private final String sessionId;
+        private final Instant startedAt;
+        private final long startedAtNs;
+        private final Path outputPath;
+        private final BufferedWriter writer;
+        private long eventCount;
+        private long sampleCount;
+        private long tickSampleCount;
+        private long frameSampleCount;
+
         private RecordingSession(
             String sessionId,
             Instant startedAt,
@@ -142,7 +163,56 @@ public final class DaqRecorder {
             Path outputPath,
             BufferedWriter writer
         ) {
-            this(sessionId, startedAt, startedAtNs, outputPath, writer, 0L, 0L);
+            this.sessionId = sessionId;
+            this.startedAt = startedAt;
+            this.startedAtNs = startedAtNs;
+            this.outputPath = outputPath;
+            this.writer = writer;
+        }
+
+        private void recordSample(SampleSource source) {
+            sampleCount++;
+            if (source == SampleSource.TICK) {
+                tickSampleCount++;
+            } else if (source == SampleSource.FRAME) {
+                frameSampleCount++;
+            }
+        }
+
+        public String sessionId() {
+            return sessionId;
+        }
+
+        public Instant startedAt() {
+            return startedAt;
+        }
+
+        public long startedAtNs() {
+            return startedAtNs;
+        }
+
+        public Path outputPath() {
+            return outputPath;
+        }
+
+        public BufferedWriter writer() {
+            return writer;
+        }
+
+        public long eventCount() {
+            return eventCount;
+        }
+
+        public long sampleCount() {
+            return sampleCount;
+        }
+
+        public long tickSampleCount() {
+            return tickSampleCount;
+        }
+
+        public long frameSampleCount() {
+            return frameSampleCount;
         }
     }
 
@@ -152,7 +222,11 @@ public final class DaqRecorder {
         Instant startedAt,
         Instant stoppedAt,
         long eventCount,
-        long sampleCount
+        long sampleCount,
+        long tickSampleCount,
+        long frameSampleCount,
+        int bufferedSampleCount,
+        int bufferCapacity
     ) {
     }
 }

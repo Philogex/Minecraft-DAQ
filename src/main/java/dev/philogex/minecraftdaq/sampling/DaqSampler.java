@@ -9,6 +9,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 
 public final class DaqSampler {
+    private static double previousTickMouseDx;
+    private static double previousTickMouseDy;
+    private static double previousFrameMouseDx;
+    private static double previousFrameMouseDy;
+
     private DaqSampler() {
     }
 
@@ -18,6 +23,7 @@ public final class DaqSampler {
     }
 
     private static void sample(DaqRecorder recorder, Minecraft client, SampleSource source) {
+        MouseDelta delta = mouseDeltaSinceLastSample(source);
         if (!recorder.isRecording()) {
             return;
         }
@@ -35,6 +41,8 @@ public final class DaqSampler {
         recorder.recordSample(new RecordingSample(
             source,
             System.nanoTime(),
+            delta.dx(),
+            delta.dy(),
             player.getYRot(),
             player.getXRot(),
             player.getX(),
@@ -45,5 +53,26 @@ public final class DaqSampler {
             client.getFps(),
             client.options.sensitivity().get()
         ));
+    }
+
+    private static MouseDelta mouseDeltaSinceLastSample(SampleSource source) {
+        MouseDeltaAccumulator.Snapshot snapshot = MouseDeltaAccumulator.snapshot();
+        double dx;
+        double dy;
+        if (source == SampleSource.TICK) {
+            dx = snapshot.totalDx() - previousTickMouseDx;
+            dy = snapshot.totalDy() - previousTickMouseDy;
+            previousTickMouseDx = snapshot.totalDx();
+            previousTickMouseDy = snapshot.totalDy();
+        } else {
+            dx = snapshot.totalDx() - previousFrameMouseDx;
+            dy = snapshot.totalDy() - previousFrameMouseDy;
+            previousFrameMouseDx = snapshot.totalDx();
+            previousFrameMouseDy = snapshot.totalDy();
+        }
+        return new MouseDelta(dx, dy);
+    }
+
+    private record MouseDelta(double dx, double dy) {
     }
 }

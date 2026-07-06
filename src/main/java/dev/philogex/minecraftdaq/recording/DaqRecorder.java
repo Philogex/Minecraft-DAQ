@@ -174,8 +174,8 @@ public final class DaqRecorder {
         appendCsv(row, Long.toString(sample.sampleTimeNs()));
         appendCsv(row, Long.toString(event.eventTimeNs()));
         appendCsv(row, Double.toString((sample.sampleTimeNs() - event.eventTimeNs()) / 1_000_000.0));
-        appendCsv(row, "");
-        appendCsv(row, "");
+        appendCsv(row, Double.toString(sample.mouseDx()));
+        appendCsv(row, Double.toString(sample.mouseDy()));
         appendCsv(row, Float.toString(sample.yaw()));
         appendCsv(row, Float.toString(sample.pitch()));
         appendCsv(row, Double.toString(sample.playerX()));

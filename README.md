@@ -129,7 +129,8 @@ sensitivity
 - `event_time_ns` is the timestamp of the observed block-state change.
 - `relative_ms` is relative to `event_time_ns`, so samples before the event are
   negative.
-- `mouse_dx` and `mouse_dy` should be raw or lowest-level available mouse deltas.
+- `mouse_dx` and `mouse_dy` are raw accumulated mouse deltas for the sample
+  interval.
 - `yaw` and `pitch` are the resulting camera orientation for the sample.
 - `target_x`, `target_y`, and `target_z` are the block coordinates of the mined
   block.

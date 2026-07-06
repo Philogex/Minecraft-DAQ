@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "dev.philogex.minecraftdaq.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "MouseHandlerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

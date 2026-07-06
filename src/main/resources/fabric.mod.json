@@ -17,6 +17,9 @@
       "dev.philogex.minecraftdaq.MinecraftDaqClient"
     ]
   },
+  "mixins": [
+    "minecraft_daq.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=${loader_version}",
     "minecraft": "${minecraft_version}",

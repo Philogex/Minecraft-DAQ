@@ -56,12 +56,12 @@ random UUID plus current wall-clock and monotonic timestamps, then hashed with
 SHA-256. Participant ids can be assigned later during analysis and do not need
 to be stored directly by the mod.
 
-`/daq stop` flushes and closes the active CSV file.
+`/daq stop` flushes and closes the active CSV files.
 
 Recordings are written below the game directory:
 
 ```text
-minecraft-daq/mining-<utc-time>-<session-prefix>.csv
+minecraft-daq/mining-<utc-time>-<session-prefix>/
 ```
 
 Long recordings should use incremental writes. The implementation keeps small
@@ -71,8 +71,8 @@ samples belonging to completed mining events.
 The current sampling layer records tick-based state samples and raw
 MouseHandler delta samples separately while a session is active. `/daq status`
 reports both counters. When a client-side block-break event is observed, the
-logger exports the recent state sample window to the active CSV file. Splitting
-the output into event, state, and mouse trajectory CSV files is planned next.
+logger exports the recent state and mouse-delta windows to the active CSV
+files.
 
 ## Mining Dataset
 
@@ -87,26 +87,15 @@ exported sample window.
 
 ### CSV Shape
 
-The first implementation should use a single CSV file. Event metadata is
-duplicated on each sample row so the file can be analyzed by grouping on
-`event_id`.
+Each recording directory contains three CSV files.
 
-Planned columns:
+`events.csv` contains one row per mined block event:
 
 ```csv
 schema_version,
 session_id,
 event_id,
-sample_time_ns,
 event_time_ns,
-relative_ms,
-mouse_dx,
-mouse_dy,
-yaw,
-pitch,
-player_x,
-player_y,
-player_z,
 target_x,
 target_y,
 target_z,
@@ -116,11 +105,41 @@ hit_y,
 hit_z,
 block_state_before,
 block_state_after,
-neighbors_json,
+neighbors_json
+```
+
+`state_samples.csv` contains tick-based player and context samples for each
+event window:
+
+```csv
+schema_version,
+session_id,
+event_id,
+sample_time_ns,
+event_time_ns,
+relative_ms,
+yaw,
+pitch,
+player_x,
+player_y,
+player_z,
 fov,
 gui_scale,
 fps_estimate,
 sensitivity
+```
+
+`mouse_trajectory.csv` contains raw MouseHandler deltas for each event window:
+
+```csv
+schema_version,
+session_id,
+event_id,
+sample_time_ns,
+event_time_ns,
+relative_ms,
+mouse_dx,
+mouse_dy
 ```
 
 ### Field Notes
@@ -130,9 +149,9 @@ sensitivity
 - `event_time_ns` is the timestamp of the observed block-state change.
 - `relative_ms` is relative to `event_time_ns`, so samples before the event are
   negative.
-- `mouse_dx` and `mouse_dy` are raw accumulated mouse deltas for the sample
-  interval.
-- `yaw` and `pitch` are the resulting camera orientation for the sample.
+- `mouse_dx` and `mouse_dy` are raw accumulated MouseHandler deltas for one
+  MouseHandler movement handling interval.
+- `yaw` and `pitch` are the resulting camera orientation for a state sample.
 - `target_x`, `target_y`, and `target_z` are the block coordinates of the mined
   block.
 - `face_id` is the hit face from the most recent matching raycast result, if

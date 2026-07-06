@@ -22,21 +22,12 @@ public final class DaqRecorder {
     private static final long EVENT_WINDOW_NS = 1_500_000_000L;
     private static final DateTimeFormatter FILE_TIME_FORMAT =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
-    private static final String CSV_HEADER = String.join(
+    private static final String EVENTS_CSV_HEADER = String.join(
         ",",
         "schema_version",
         "session_id",
         "event_id",
-        "sample_time_ns",
         "event_time_ns",
-        "relative_ms",
-        "mouse_dx",
-        "mouse_dy",
-        "yaw",
-        "pitch",
-        "player_x",
-        "player_y",
-        "player_z",
         "target_x",
         "target_y",
         "target_z",
@@ -46,11 +37,36 @@ public final class DaqRecorder {
         "hit_z",
         "block_state_before",
         "block_state_after",
-        "neighbors_json",
+        "neighbors_json"
+    );
+    private static final String STATE_SAMPLES_CSV_HEADER = String.join(
+        ",",
+        "schema_version",
+        "session_id",
+        "event_id",
+        "sample_time_ns",
+        "event_time_ns",
+        "relative_ms",
+        "yaw",
+        "pitch",
+        "player_x",
+        "player_y",
+        "player_z",
         "fov",
         "gui_scale",
         "fps_estimate",
         "sensitivity"
+    );
+    private static final String MOUSE_TRAJECTORY_CSV_HEADER = String.join(
+        ",",
+        "schema_version",
+        "session_id",
+        "event_id",
+        "sample_time_ns",
+        "event_time_ns",
+        "relative_ms",
+        "mouse_dx",
+        "mouse_dy"
     );
 
     private final Path outputDirectory;
@@ -71,15 +87,18 @@ public final class DaqRecorder {
         String sessionId = newSessionId();
         Instant startedAt = Instant.now();
         Path outputPath = outputDirectory.resolve(
-            "mining-" + FILE_TIME_FORMAT.format(startedAt) + "-" + sessionId.substring(0, 12) + ".csv"
+            "mining-" + FILE_TIME_FORMAT.format(startedAt) + "-" + sessionId.substring(0, 12)
         );
-        BufferedWriter writer = Files.newBufferedWriter(
-            outputPath,
-            StandardCharsets.UTF_8
+        Files.createDirectories(outputPath);
+        BufferedWriter eventsWriter = newCsvWriter(outputPath.resolve("events.csv"), EVENTS_CSV_HEADER);
+        BufferedWriter stateSamplesWriter = newCsvWriter(
+            outputPath.resolve("state_samples.csv"),
+            STATE_SAMPLES_CSV_HEADER
         );
-        writer.write(CSV_HEADER);
-        writer.newLine();
-        writer.flush();
+        BufferedWriter mouseTrajectoryWriter = newCsvWriter(
+            outputPath.resolve("mouse_trajectory.csv"),
+            MOUSE_TRAJECTORY_CSV_HEADER
+        );
 
         samples.clear();
         mouseDeltas.clear();
@@ -88,7 +107,9 @@ public final class DaqRecorder {
             startedAt,
             System.nanoTime(),
             outputPath,
-            writer
+            eventsWriter,
+            stateSamplesWriter,
+            mouseTrajectoryWriter
         );
         return activeSession;
     }
@@ -100,8 +121,8 @@ public final class DaqRecorder {
 
         RecordingSession session = activeSession;
         activeSession = null;
-        session.writer().flush();
-        session.writer().close();
+        session.flush();
+        session.close();
         return new RecordingSummary(
             session.sessionId(),
             session.outputPath(),
@@ -148,11 +169,16 @@ public final class DaqRecorder {
 
         RecordingSession session = activeSession;
         long eventId = session.nextEventId();
+        writeEvent(session, eventId, event);
         List<RecordingSample> eventSamples = samples.recentSince(event.eventTimeNs() - EVENT_WINDOW_NS);
         for (RecordingSample sample : eventSamples) {
-            writeMiningSample(session, eventId, event, sample);
+            writeStateSample(session, eventId, event, sample);
         }
-        session.writer().flush();
+        List<MouseDeltaSample> eventMouseDeltas = mouseDeltas.recentSince(event.eventTimeNs() - EVENT_WINDOW_NS);
+        for (MouseDeltaSample sample : eventMouseDeltas) {
+            writeMouseDelta(session, eventId, event, sample);
+        }
+        session.flush();
     }
 
     public Path outputDirectory() {
@@ -173,7 +199,39 @@ public final class DaqRecorder {
         }
     }
 
-    private static void writeMiningSample(
+    private static BufferedWriter newCsvWriter(Path outputPath, String header) throws IOException {
+        BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
+        writer.write(header);
+        writer.newLine();
+        writer.flush();
+        return writer;
+    }
+
+    private static void writeEvent(
+        RecordingSession session,
+        long eventId,
+        MiningEventData event
+    ) throws IOException {
+        StringBuilder row = new StringBuilder(512);
+        appendCsv(row, Integer.toString(SCHEMA_VERSION));
+        appendCsv(row, session.sessionId());
+        appendCsv(row, Long.toString(eventId));
+        appendCsv(row, Long.toString(event.eventTimeNs()));
+        appendCsv(row, Integer.toString(event.targetX()));
+        appendCsv(row, Integer.toString(event.targetY()));
+        appendCsv(row, Integer.toString(event.targetZ()));
+        appendCsv(row, event.faceId());
+        appendCsv(row, doubleOrEmpty(event.hitX()));
+        appendCsv(row, doubleOrEmpty(event.hitY()));
+        appendCsv(row, doubleOrEmpty(event.hitZ()));
+        appendCsv(row, event.blockStateBefore());
+        appendCsv(row, event.blockStateAfter());
+        appendCsv(row, event.neighborsJson());
+        session.eventsWriter().write(row.toString());
+        session.eventsWriter().newLine();
+    }
+
+    private static void writeStateSample(
         RecordingSession session,
         long eventId,
         MiningEventData event,
@@ -186,29 +244,36 @@ public final class DaqRecorder {
         appendCsv(row, Long.toString(sample.sampleTimeNs()));
         appendCsv(row, Long.toString(event.eventTimeNs()));
         appendCsv(row, Double.toString((sample.sampleTimeNs() - event.eventTimeNs()) / 1_000_000.0));
-        appendCsv(row, "");
-        appendCsv(row, "");
         appendCsv(row, Float.toString(sample.yaw()));
         appendCsv(row, Float.toString(sample.pitch()));
         appendCsv(row, Double.toString(sample.playerX()));
         appendCsv(row, Double.toString(sample.playerY()));
         appendCsv(row, Double.toString(sample.playerZ()));
-        appendCsv(row, Integer.toString(event.targetX()));
-        appendCsv(row, Integer.toString(event.targetY()));
-        appendCsv(row, Integer.toString(event.targetZ()));
-        appendCsv(row, event.faceId());
-        appendCsv(row, doubleOrEmpty(event.hitX()));
-        appendCsv(row, doubleOrEmpty(event.hitY()));
-        appendCsv(row, doubleOrEmpty(event.hitZ()));
-        appendCsv(row, event.blockStateBefore());
-        appendCsv(row, event.blockStateAfter());
-        appendCsv(row, event.neighborsJson());
         appendCsv(row, Integer.toString(sample.fov()));
         appendCsv(row, Integer.toString(sample.guiScale()));
         appendCsv(row, Integer.toString(sample.fpsEstimate()));
         appendCsv(row, Double.toString(sample.sensitivity()));
-        session.writer().write(row.toString());
-        session.writer().newLine();
+        session.stateSamplesWriter().write(row.toString());
+        session.stateSamplesWriter().newLine();
+    }
+
+    private static void writeMouseDelta(
+        RecordingSession session,
+        long eventId,
+        MiningEventData event,
+        MouseDeltaSample sample
+    ) throws IOException {
+        StringBuilder row = new StringBuilder(256);
+        appendCsv(row, Integer.toString(SCHEMA_VERSION));
+        appendCsv(row, session.sessionId());
+        appendCsv(row, Long.toString(eventId));
+        appendCsv(row, Long.toString(sample.sampleTimeNs()));
+        appendCsv(row, Long.toString(event.eventTimeNs()));
+        appendCsv(row, Double.toString((sample.sampleTimeNs() - event.eventTimeNs()) / 1_000_000.0));
+        appendCsv(row, Double.toString(sample.mouseDx()));
+        appendCsv(row, Double.toString(sample.mouseDy()));
+        session.mouseTrajectoryWriter().write(row.toString());
+        session.mouseTrajectoryWriter().newLine();
     }
 
     private static String doubleOrEmpty(double value) {
@@ -250,7 +315,9 @@ public final class DaqRecorder {
         private final Instant startedAt;
         private final long startedAtNs;
         private final Path outputPath;
-        private final BufferedWriter writer;
+        private final BufferedWriter eventsWriter;
+        private final BufferedWriter stateSamplesWriter;
+        private final BufferedWriter mouseTrajectoryWriter;
         private long eventCount;
         private long stateSampleCount;
         private long mouseDeltaCount;
@@ -260,13 +327,17 @@ public final class DaqRecorder {
             Instant startedAt,
             long startedAtNs,
             Path outputPath,
-            BufferedWriter writer
+            BufferedWriter eventsWriter,
+            BufferedWriter stateSamplesWriter,
+            BufferedWriter mouseTrajectoryWriter
         ) {
             this.sessionId = sessionId;
             this.startedAt = startedAt;
             this.startedAtNs = startedAtNs;
             this.outputPath = outputPath;
-            this.writer = writer;
+            this.eventsWriter = eventsWriter;
+            this.stateSamplesWriter = stateSamplesWriter;
+            this.mouseTrajectoryWriter = mouseTrajectoryWriter;
         }
 
         private void recordStateSample() {
@@ -298,8 +369,28 @@ public final class DaqRecorder {
             return outputPath;
         }
 
-        public BufferedWriter writer() {
-            return writer;
+        public BufferedWriter eventsWriter() {
+            return eventsWriter;
+        }
+
+        public BufferedWriter stateSamplesWriter() {
+            return stateSamplesWriter;
+        }
+
+        public BufferedWriter mouseTrajectoryWriter() {
+            return mouseTrajectoryWriter;
+        }
+
+        private void flush() throws IOException {
+            eventsWriter.flush();
+            stateSamplesWriter.flush();
+            mouseTrajectoryWriter.flush();
+        }
+
+        private void close() throws IOException {
+            try (eventsWriter; stateSamplesWriter; mouseTrajectoryWriter) {
+                flush();
+            }
         }
 
         public long eventCount() {

@@ -11,12 +11,14 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
 public final class DaqRecorder {
     private static final int SCHEMA_VERSION = 1;
     private static final int RING_BUFFER_CAPACITY = 8192;
+    private static final long EVENT_WINDOW_NS = 1_500_000_000L;
     private static final DateTimeFormatter FILE_TIME_FORMAT =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
     private static final String CSV_HEADER = String.join(
@@ -127,6 +129,20 @@ public final class DaqRecorder {
         activeSession.recordSample(sample.source());
     }
 
+    public synchronized void recordMiningEvent(MiningEventData event) throws IOException {
+        if (activeSession == null) {
+            return;
+        }
+
+        RecordingSession session = activeSession;
+        long eventId = session.nextEventId();
+        List<RecordingSample> eventSamples = samples.recentSince(event.eventTimeNs() - EVENT_WINDOW_NS);
+        for (RecordingSample sample : eventSamples) {
+            writeMiningSample(session, eventId, event, sample);
+        }
+        session.writer().flush();
+    }
+
     public Path outputDirectory() {
         return outputDirectory;
     }
@@ -143,6 +159,78 @@ public final class DaqRecorder {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available", exception);
         }
+    }
+
+    private static void writeMiningSample(
+        RecordingSession session,
+        long eventId,
+        MiningEventData event,
+        RecordingSample sample
+    ) throws IOException {
+        StringBuilder row = new StringBuilder(512);
+        appendCsv(row, Integer.toString(SCHEMA_VERSION));
+        appendCsv(row, session.sessionId());
+        appendCsv(row, Long.toString(eventId));
+        appendCsv(row, Long.toString(sample.sampleTimeNs()));
+        appendCsv(row, Long.toString(event.eventTimeNs()));
+        appendCsv(row, Double.toString((sample.sampleTimeNs() - event.eventTimeNs()) / 1_000_000.0));
+        appendCsv(row, "");
+        appendCsv(row, "");
+        appendCsv(row, Float.toString(sample.yaw()));
+        appendCsv(row, Float.toString(sample.pitch()));
+        appendCsv(row, Double.toString(sample.playerX()));
+        appendCsv(row, Double.toString(sample.playerY()));
+        appendCsv(row, Double.toString(sample.playerZ()));
+        appendCsv(row, Integer.toString(event.targetX()));
+        appendCsv(row, Integer.toString(event.targetY()));
+        appendCsv(row, Integer.toString(event.targetZ()));
+        appendCsv(row, event.faceId());
+        appendCsv(row, doubleOrEmpty(event.hitX()));
+        appendCsv(row, doubleOrEmpty(event.hitY()));
+        appendCsv(row, doubleOrEmpty(event.hitZ()));
+        appendCsv(row, event.blockStateBefore());
+        appendCsv(row, event.blockStateAfter());
+        appendCsv(row, event.neighborsJson());
+        appendCsv(row, Integer.toString(sample.fov()));
+        appendCsv(row, Integer.toString(sample.guiScale()));
+        appendCsv(row, Integer.toString(sample.fpsEstimate()));
+        appendCsv(row, Double.toString(sample.sensitivity()));
+        session.writer().write(row.toString());
+        session.writer().newLine();
+    }
+
+    private static String doubleOrEmpty(double value) {
+        if (Double.isNaN(value)) {
+            return "";
+        }
+        return Double.toString(value);
+    }
+
+    private static void appendCsv(StringBuilder out, String value) {
+        if (!out.isEmpty()) {
+            out.append(',');
+        }
+
+        boolean quote = value.isEmpty();
+        for (int index = 0; index < value.length() && !quote; index++) {
+            char ch = value.charAt(index);
+            quote = ch == ',' || ch == '"' || ch == '\n' || ch == '\r';
+        }
+
+        if (!quote) {
+            out.append(value);
+            return;
+        }
+
+        out.append('"');
+        for (int index = 0; index < value.length(); index++) {
+            char ch = value.charAt(index);
+            if (ch == '"') {
+                out.append('"');
+            }
+            out.append(ch);
+        }
+        out.append('"');
     }
 
     public static final class RecordingSession {
@@ -177,6 +265,11 @@ public final class DaqRecorder {
             } else if (source == SampleSource.FRAME) {
                 frameSampleCount++;
             }
+        }
+
+        private long nextEventId() {
+            eventCount++;
+            return eventCount;
         }
 
         public String sessionId() {

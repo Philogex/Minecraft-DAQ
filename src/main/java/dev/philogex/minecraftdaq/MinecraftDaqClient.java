@@ -1,6 +1,7 @@
 package dev.philogex.minecraftdaq;
 
 import dev.philogex.minecraftdaq.command.DaqCommands;
+import dev.philogex.minecraftdaq.mining.DaqMiningEvents;
 import dev.philogex.minecraftdaq.recording.DaqRecorder;
 import dev.philogex.minecraftdaq.sampling.DaqSampler;
 import net.fabricmc.api.ClientModInitializer;
@@ -17,6 +18,7 @@ public final class MinecraftDaqClient implements ClientModInitializer {
         DaqRecorder recorder = new DaqRecorder(FabricLoader.getInstance().getGameDir());
         DaqCommands.register(recorder);
         DaqSampler.register(recorder);
+        DaqMiningEvents.register(recorder);
         LOGGER.info("Minecraft DAQ initialized");
     }
 }

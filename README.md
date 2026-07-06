@@ -9,8 +9,9 @@ reconstruct the final aim movement that led to a mined block.
 
 ## Status
 
-This repository currently contains the Fabric project skeleton only. The data
-logger, commands, and event matching are intentionally not implemented yet.
+This repository currently contains the first mining data-capture path:
+recording commands, tick/frame sampling, and client-side block-break event
+export.
 
 ## Build
 
@@ -68,8 +69,9 @@ small in-memory ring buffer for recent samples and only export samples belonging
 to completed mining events.
 
 The current sampling layer records into an in-memory ring buffer while a
-session is active. `/daq status` reports total, tick, and frame sample counts so
-the sampling hooks can be verified in-game before event export is added.
+session is active. `/daq status` reports total, tick, and frame sample counts.
+When a client-side block-break event is observed, the logger exports the recent
+sample window to the active CSV file.
 
 ## Mining Dataset
 

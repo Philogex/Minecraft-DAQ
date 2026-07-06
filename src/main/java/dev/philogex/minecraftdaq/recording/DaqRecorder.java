@@ -17,7 +17,8 @@ import java.util.UUID;
 
 public final class DaqRecorder {
     private static final int SCHEMA_VERSION = 1;
-    private static final int RING_BUFFER_CAPACITY = 8192;
+    private static final int STATE_RING_BUFFER_CAPACITY = 8192;
+    private static final int MOUSE_RING_BUFFER_CAPACITY = 8192;
     private static final long EVENT_WINDOW_NS = 1_500_000_000L;
     private static final DateTimeFormatter FILE_TIME_FORMAT =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
@@ -53,7 +54,8 @@ public final class DaqRecorder {
     );
 
     private final Path outputDirectory;
-    private final SampleRingBuffer samples = new SampleRingBuffer(RING_BUFFER_CAPACITY);
+    private final SampleRingBuffer samples = new SampleRingBuffer(STATE_RING_BUFFER_CAPACITY);
+    private final MouseDeltaRingBuffer mouseDeltas = new MouseDeltaRingBuffer(MOUSE_RING_BUFFER_CAPACITY);
     private RecordingSession activeSession;
 
     public DaqRecorder(Path gameDirectory) {
@@ -80,6 +82,7 @@ public final class DaqRecorder {
         writer.flush();
 
         samples.clear();
+        mouseDeltas.clear();
         activeSession = new RecordingSession(
             sessionId,
             startedAt,
@@ -105,11 +108,12 @@ public final class DaqRecorder {
             session.startedAt(),
             Instant.now(),
             session.eventCount(),
-            session.sampleCount(),
-            session.tickSampleCount(),
-            session.frameSampleCount(),
+            session.stateSampleCount(),
+            session.mouseDeltaCount(),
             samples.size(),
-            samples.capacity()
+            samples.capacity(),
+            mouseDeltas.size(),
+            mouseDeltas.capacity()
         );
     }
 
@@ -126,7 +130,15 @@ public final class DaqRecorder {
             return;
         }
         samples.add(sample);
-        activeSession.recordSample(sample.source());
+        activeSession.recordStateSample();
+    }
+
+    public synchronized void recordMouseDelta(double dx, double dy) {
+        if (activeSession == null) {
+            return;
+        }
+        mouseDeltas.add(new MouseDeltaSample(System.nanoTime(), dx, dy));
+        activeSession.recordMouseDelta();
     }
 
     public synchronized void recordMiningEvent(MiningEventData event) throws IOException {
@@ -174,8 +186,8 @@ public final class DaqRecorder {
         appendCsv(row, Long.toString(sample.sampleTimeNs()));
         appendCsv(row, Long.toString(event.eventTimeNs()));
         appendCsv(row, Double.toString((sample.sampleTimeNs() - event.eventTimeNs()) / 1_000_000.0));
-        appendCsv(row, Double.toString(sample.mouseDx()));
-        appendCsv(row, Double.toString(sample.mouseDy()));
+        appendCsv(row, "");
+        appendCsv(row, "");
         appendCsv(row, Float.toString(sample.yaw()));
         appendCsv(row, Float.toString(sample.pitch()));
         appendCsv(row, Double.toString(sample.playerX()));
@@ -240,9 +252,8 @@ public final class DaqRecorder {
         private final Path outputPath;
         private final BufferedWriter writer;
         private long eventCount;
-        private long sampleCount;
-        private long tickSampleCount;
-        private long frameSampleCount;
+        private long stateSampleCount;
+        private long mouseDeltaCount;
 
         private RecordingSession(
             String sessionId,
@@ -258,13 +269,12 @@ public final class DaqRecorder {
             this.writer = writer;
         }
 
-        private void recordSample(SampleSource source) {
-            sampleCount++;
-            if (source == SampleSource.TICK) {
-                tickSampleCount++;
-            } else if (source == SampleSource.FRAME) {
-                frameSampleCount++;
-            }
+        private void recordStateSample() {
+            stateSampleCount++;
+        }
+
+        private void recordMouseDelta() {
+            mouseDeltaCount++;
         }
 
         private long nextEventId() {
@@ -296,16 +306,12 @@ public final class DaqRecorder {
             return eventCount;
         }
 
-        public long sampleCount() {
-            return sampleCount;
+        public long stateSampleCount() {
+            return stateSampleCount;
         }
 
-        public long tickSampleCount() {
-            return tickSampleCount;
-        }
-
-        public long frameSampleCount() {
-            return frameSampleCount;
+        public long mouseDeltaCount() {
+            return mouseDeltaCount;
         }
     }
 
@@ -315,11 +321,12 @@ public final class DaqRecorder {
         Instant startedAt,
         Instant stoppedAt,
         long eventCount,
-        long sampleCount,
-        long tickSampleCount,
-        long frameSampleCount,
-        int bufferedSampleCount,
-        int bufferCapacity
+        long stateSampleCount,
+        long mouseDeltaCount,
+        int bufferedStateSampleCount,
+        int stateBufferCapacity,
+        int bufferedMouseDeltaCount,
+        int mouseBufferCapacity
     ) {
     }
 }

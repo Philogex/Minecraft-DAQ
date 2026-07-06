@@ -10,7 +10,7 @@ reconstruct the final aim movement that led to a mined block.
 ## Status
 
 This repository currently contains the first mining data-capture path:
-recording commands, tick/frame sampling, and client-side block-break event
+recording commands, tick-based state sampling, raw mouse-delta sampling, and client-side block-break event
 export.
 
 ## Build
@@ -64,14 +64,15 @@ Recordings are written below the game directory:
 minecraft-daq/mining-<utc-time>-<session-prefix>.csv
 ```
 
-Long recordings should use incremental writes. The implementation should keep a
-small in-memory ring buffer for recent samples and only export samples belonging
-to completed mining events.
+Long recordings should use incremental writes. The implementation keeps small
+in-memory ring buffers for recent state and mouse-delta samples and only exports
+samples belonging to completed mining events.
 
-The current sampling layer records into an in-memory ring buffer while a
-session is active. `/daq status` reports total, tick, and frame sample counts.
-When a client-side block-break event is observed, the logger exports the recent
-sample window to the active CSV file.
+The current sampling layer records tick-based state samples and raw
+MouseHandler delta samples separately while a session is active. `/daq status`
+reports both counters. When a client-side block-break event is observed, the
+logger exports the recent state sample window to the active CSV file. Splitting
+the output into event, state, and mouse trajectory CSV files is planned next.
 
 ## Mining Dataset
 

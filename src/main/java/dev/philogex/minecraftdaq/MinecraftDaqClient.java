@@ -4,6 +4,7 @@ import dev.philogex.minecraftdaq.command.DaqCommands;
 import dev.philogex.minecraftdaq.mining.DaqMiningEvents;
 import dev.philogex.minecraftdaq.recording.DaqRecorder;
 import dev.philogex.minecraftdaq.sampling.DaqSampler;
+import dev.philogex.minecraftdaq.sampling.MouseDeltaCapture;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ public final class MinecraftDaqClient implements ClientModInitializer {
         DaqRecorder recorder = new DaqRecorder(FabricLoader.getInstance().getGameDir());
         DaqCommands.register(recorder);
         DaqSampler.register(recorder);
+        MouseDeltaCapture.register(recorder);
         DaqMiningEvents.register(recorder);
         LOGGER.info("Minecraft DAQ initialized");
     }

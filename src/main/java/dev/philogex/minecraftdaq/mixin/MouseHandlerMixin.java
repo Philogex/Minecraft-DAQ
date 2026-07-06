@@ -1,6 +1,6 @@
 package dev.philogex.minecraftdaq.mixin;
 
-import dev.philogex.minecraftdaq.sampling.MouseDeltaAccumulator;
+import dev.philogex.minecraftdaq.sampling.MouseDeltaCapture;
 import net.minecraft.client.MouseHandler;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -19,7 +19,7 @@ public abstract class MouseHandlerMixin {
     @Inject(method = "handleAccumulatedMovement", at = @At("HEAD"))
     private void minecraftDaq$recordAccumulatedMovement(CallbackInfo info) {
         if (accumulatedDX != 0.0 || accumulatedDY != 0.0) {
-            MouseDeltaAccumulator.add(accumulatedDX, accumulatedDY);
+            MouseDeltaCapture.record(accumulatedDX, accumulatedDY);
         }
     }
 }

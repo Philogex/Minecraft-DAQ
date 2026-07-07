@@ -61,7 +61,14 @@ jobs:
             echo "Expected release tag format vX.X.X, got '$tag'" >&2
             exit 1
           fi
+          version="${tag#v}"
+          gradle_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          if [[ "$gradle_version" != "$version" ]]; then
+            echo "Tag $tag expects mod_version=$version, but gradle.properties has mod_version=$gradle_version" >&2
+            exit 1
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -81,18 +88,28 @@ jobs:
         id: artifact
         shell: bash
         run: |
-          jar_path="$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' | sort | head -n 1)"
+          jar_path="$(find build/libs -maxdepth 1 -type f -name '*-${{ steps.release.outputs.version }}.jar' ! -name '*-sources.jar' | sort | head -n 1)"
           if [[ -z "$jar_path" ]]; then
-            echo "No mod JAR found in build/libs" >&2
+            echo "No mod JAR for version ${{ steps.release.outputs.version }} found in build/libs" >&2
             exit 1
           fi
           echo "jar_path=$jar_path" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release asset
+        id: release_asset
+        shell: bash
+        run: |
+          minecraft_version="$(sed -n 's/^minecraft_version=//p' gradle.properties)"
+          asset_path="build/release/minecraft-daq-${{ steps.release.outputs.tag }}-mc${minecraft_version}.jar"
+          mkdir -p "$(dirname "$asset_path")"
+          cp "${{ steps.artifact.outputs.jar_path }}" "$asset_path"
+          echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
 
       - name: Upload mod artifacts
         uses: actions/upload-artifact@v6
         with:
           name: minecraft-daq-${{ steps.release.outputs.tag }}
-          path: ${{ steps.artifact.outputs.jar_path }}
+          path: ${{ steps.release_asset.outputs.asset_path }}
           if-no-files-found: error
           retention-days: 14
 
@@ -105,4 +122,4 @@ jobs:
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" --title "$tag" --notes "Minecraft DAQ $tag"
           fi
-          gh release upload "$tag" "${{ steps.artifact.outputs.jar_path }}" --clobber
+          gh release upload "$tag" "${{ steps.release_asset.outputs.asset_path }}" --clobber

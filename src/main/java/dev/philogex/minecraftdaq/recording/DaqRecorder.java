@@ -146,6 +146,19 @@ public final class DaqRecorder {
         return activeSession != null;
     }
 
+    public synchronized RecordingStats recordingStats() {
+        if (activeSession == null) {
+            return null;
+        }
+        return new RecordingStats(
+            activeSession.sessionId(),
+            activeSession.outputPath(),
+            activeSession.eventCount(),
+            activeSession.stateSampleCount(),
+            activeSession.mouseDeltaCount()
+        );
+    }
+
     public synchronized void recordSample(RecordingSample sample) {
         if (activeSession == null) {
             return;
@@ -418,6 +431,15 @@ public final class DaqRecorder {
         int stateBufferCapacity,
         int bufferedMouseDeltaCount,
         int mouseBufferCapacity
+    ) {
+    }
+
+    public record RecordingStats(
+        String sessionId,
+        Path outputPath,
+        long eventCount,
+        long stateSampleCount,
+        long mouseDeltaCount
     ) {
     }
 }

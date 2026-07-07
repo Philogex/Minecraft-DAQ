@@ -74,6 +74,9 @@ reports both counters. When a client-side block-break event is observed, the
 logger exports the recent state and mouse-delta windows to the active CSV
 files.
 
+While recording, a small HUD overlay shows the current event, state sample, and
+mouse delta counts.
+
 ## Mining Dataset
 
 The mining dataset is event-based. A mining event is created when the block

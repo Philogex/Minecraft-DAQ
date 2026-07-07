@@ -1,6 +1,7 @@
 package dev.philogex.minecraftdaq;
 
 import dev.philogex.minecraftdaq.command.DaqCommands;
+import dev.philogex.minecraftdaq.hud.DaqHudOverlay;
 import dev.philogex.minecraftdaq.mining.DaqMiningEvents;
 import dev.philogex.minecraftdaq.recording.DaqRecorder;
 import dev.philogex.minecraftdaq.sampling.DaqSampler;
@@ -21,6 +22,7 @@ public final class MinecraftDaqClient implements ClientModInitializer {
         DaqSampler.register(recorder);
         MouseDeltaCapture.register(recorder);
         DaqMiningEvents.register(recorder);
+        DaqHudOverlay.register(recorder);
         LOGGER.info("Minecraft DAQ initialized");
     }
 }

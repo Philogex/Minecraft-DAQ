@@ -8,7 +8,7 @@ from array import array
 from dataclasses import asdict, replace
 from pathlib import Path
 
-from analysis.mining_session import RecordedMiningEvent
+from analysis.mining_session import RecordedMiningEvent, StateSample
 from analysis.path_dataset import (
     GenerationCase,
     GeneratedTrajectory,
@@ -64,6 +64,9 @@ class MinescriptMinerBackend:
             version = "development"
         return {"package": "minescript-miner", "version": version}
 
+    def angular_step_deg(self, sensitivity: float) -> float:
+        return self._aim.sensitivity_to_angular_step_deg(sensitivity)
+
     @staticmethod
     def _target_orientation(
         eye: tuple[float, float, float],
@@ -96,6 +99,8 @@ class MinescriptMinerBackend:
         recorded: RecordedMiningEvent,
         *,
         eye_height: float,
+        start_sample: StateSample | None = None,
+        start_source: str = "window_first_sample",
     ) -> GenerationCase:
         if not recorded.state_samples:
             raise GenerationCaseError("missing_state_samples", "event has no state samples")
@@ -103,7 +108,7 @@ class MinescriptMinerBackend:
         if event.hit_x is None or event.hit_y is None or event.hit_z is None:
             raise GenerationCaseError("missing_hit_point", "event has no hit point")
 
-        start = recorded.state_samples[0]
+        start = start_sample or recorded.state_samples[0]
         numeric_context = (
             start.yaw, start.pitch, start.player_x, start.player_y,
             start.player_z, start.sensitivity,
@@ -205,6 +210,7 @@ class MinescriptMinerBackend:
                 width_source="local_26_neighbor_reconstruction",
             ),
             angular_step_deg=angular_step,
+            start_source=start_source,
         )
 
     def generate(

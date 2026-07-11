@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
 
 
@@ -14,8 +15,14 @@ project_root = str(PROJECT_ROOT)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from analysis.aim_features import AimPoint
 from analysis.minescript_miner_backend import GenerationCaseError, MinescriptMinerBackend
 from analysis.mining_session import load_mining_session
+from analysis.movement_segmentation import (
+    MovementSegmentationConfig,
+    segment_target_movement,
+)
+from analysis.path_density import AngularTarget
 from analysis.path_dataset import deterministic_seed, write_generated_dataset
 
 
@@ -33,6 +40,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, help="Minescript-Miner aim_config.txt.")
     parser.add_argument("--eye-height", type=float, default=1.62)
     parser.add_argument("--max-events", type=int, default=0)
+    parser.add_argument(
+        "--no-segmentation",
+        action="store_true",
+        help="Use the first 1.5 s window sample instead of detected movement onset.",
+    )
+    parser.add_argument("--max-idle-gap-ms", type=float, default=150.0)
+    parser.add_argument("--minimum-motion-ratio", type=float, default=0.1)
+    parser.add_argument("--max-player-displacement", type=float, default=0.05)
     return parser.parse_args()
 
 
@@ -47,6 +62,11 @@ def main() -> None:
     backend = MinescriptMinerBackend(args.generator, args.config)
     skipped: Counter[str] = Counter()
     trajectories = []
+    segmentation_config = MovementSegmentationConfig(
+        max_idle_gap_ms=args.max_idle_gap_ms,
+        minimum_motion_ratio=args.minimum_motion_ratio,
+        max_player_displacement=args.max_player_displacement,
+    )
     source_events = session.events[: args.max_events or None]
     for recorded in source_events:
         try:
@@ -58,6 +78,42 @@ def main() -> None:
         except GenerationCaseError as error:
             skipped[error.reason] += 1
             continue
+        if not args.no_segmentation:
+            points = tuple(
+                AimPoint(sample.yaw, sample.pitch, sample.relative_ms)
+                for sample in recorded.state_samples
+            )
+            segmentation = segment_target_movement(
+                points,
+                AngularTarget(
+                    yaw=case.target.yaw,
+                    pitch=case.target.pitch,
+                    width_yaw=case.target.width_yaw,
+                    width_pitch=case.target.width_pitch,
+                ),
+                angular_step_deg=case.angular_step_deg,
+                player_positions=tuple(
+                    (sample.player_x, sample.player_y, sample.player_z)
+                    for sample in recorded.state_samples
+                ),
+                config=segmentation_config,
+            )
+            if segmentation.segment is None:
+                skipped[segmentation.reason or "unknown_segmentation_failure"] += 1
+                continue
+            try:
+                case = backend.prepare_case(
+                    session.session_id,
+                    recorded,
+                    eye_height=args.eye_height,
+                    start_sample=recorded.state_samples[
+                        segmentation.segment.start_index
+                    ],
+                    start_source="detected_movement_onset",
+                )
+            except GenerationCaseError as error:
+                skipped[error.reason] += 1
+                continue
         for replicate_index in range(args.replicates):
             seed = deterministic_seed(
                 session.session_id,
@@ -84,6 +140,12 @@ def main() -> None:
         generator_config=backend.config_metadata,
         backend_metadata=backend.backend_metadata,
         skipped_reasons=skipped,
+        preprocessing_metadata={
+            "movement_segmentation": {
+                "enabled": not args.no_segmentation,
+                "config": asdict(segmentation_config),
+            }
+        },
     )
     print(
         f"Wrote {args.output.resolve()} with {len(trajectories)} trajectories "

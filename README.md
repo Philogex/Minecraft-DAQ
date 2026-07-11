@@ -246,10 +246,11 @@ its source event, deterministic seed, replicate index, reconstructed target
 width, and an analysis weight of `1 / replicate_count` in `metadata.json`.
 Thus every human target condition contributes total weight one per generator.
 
-The current first-stage generator uses the earliest state sample in the 1.5 s
-event window as its start orientation. This is explicitly marked as
-`window_first_sample`; movement-onset segmentation will replace that selection
-without changing the generator or batch format.
+By default, the generator detects the final stationary-player movement episode
+inside the 1.5 s window and uses its onset as the generated path's initial
+condition. The metadata records `detected_movement_onset`, all segmentation
+parameters, and skipped-event counts. `--no-segmentation` retains the earlier
+`window_first_sample` behavior for diagnostics.
 
 ### Path Density Comparison
 
@@ -287,10 +288,14 @@ shared limits and color scaling inside each stratum. Panel titles report the
 visible fraction, medians of `W_eff`, Fitts ID, and the reconstructed yaw/pitch
 widths. Viewport clipping never removes paths from the statistics.
 
-The human plots currently include the complete 1.5 s pre-break recording
-window. They can therefore include motion toward previous blocks. A validated
-movement-onset segmentation stage is still required before interpreting the
-mean human path or treating these figures as final experimental results.
+Before plotting human data, the analyzer separates active camera intervals from
+quantized still samples, bridges short correction pauses, and selects the most
+recent episode that has sufficient amplitude, approaches the target, and ends
+inside its reconstructed angular extent. Hold time after aiming and motion
+toward previous blocks are removed. Events whose player position changes by
+more than `0.05` blocks during the episode are excluded from the stationary
+cohort. Parameters are exposed by the CLI, and a JSON report next to the PNG
+records the configuration plus every invalidation reason and count.
 
 ## Future Datasets
 

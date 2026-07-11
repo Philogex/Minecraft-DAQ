@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 
@@ -17,6 +19,10 @@ if project_root not in sys.path:
 from analysis.aim_features import AimPoint
 from analysis.minescript_miner_backend import GenerationCaseError, MinescriptMinerBackend
 from analysis.mining_session import MiningSession, RecordedMiningEvent, load_mining_session
+from analysis.movement_segmentation import (
+    MovementSegmentationConfig,
+    segment_target_movement,
+)
 from analysis.path_density import (
     AlignedPath,
     AngularTarget,
@@ -61,6 +67,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--eye-height", type=float, default=1.62)
     parser.add_argument("--config", type=Path, help="Minescript-Miner aim config.")
+    parser.add_argument(
+        "--no-segmentation",
+        action="store_true",
+        help="Plot complete recorded windows instead of detected movement episodes.",
+    )
+    parser.add_argument("--max-idle-gap-ms", type=float, default=150.0)
+    parser.add_argument("--minimum-motion-ratio", type=float, default=0.1)
+    parser.add_argument("--max-player-displacement", type=float, default=0.05)
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()
 
@@ -109,8 +123,10 @@ def _records_for_session(
     backend: MinescriptMinerBackend,
     *,
     eye_height: float,
+    segmentation_config: MovementSegmentationConfig | None = None,
 ) -> tuple[tuple[PathDensityRecord, ...], dict[str, int]]:
     generated_metadata = _generated_metadata_by_event(session)
+    is_generated = bool(generated_metadata)
     records: list[PathDensityRecord] = []
     skipped: dict[str, int] = {}
     for recorded in session.events:
@@ -145,6 +161,45 @@ def _records_for_session(
                     width_yaw=case.target.width_yaw,
                     width_pitch=case.target.width_pitch,
                 ),
+            )
+        if segmentation_config is not None and not is_generated:
+            result = segment_target_movement(
+                record.points,
+                record.target,
+                angular_step_deg=backend.angular_step_deg(
+                    recorded.state_samples[0].sensitivity
+                ),
+                player_positions=tuple(
+                    (sample.player_x, sample.player_y, sample.player_z)
+                    for sample in recorded.state_samples
+                ),
+                config=segmentation_config,
+            )
+            if result.segment is None:
+                reason = result.reason or "unknown_segmentation_failure"
+                skipped[reason] = skipped.get(reason, 0) + 1
+                continue
+            try:
+                refined_case = backend.prepare_case(
+                    session.session_id,
+                    recorded,
+                    eye_height=eye_height,
+                    start_sample=recorded.state_samples[result.segment.start_index],
+                    start_source="detected_movement_onset",
+                )
+            except GenerationCaseError as error:
+                skipped[error.reason] = skipped.get(error.reason, 0) + 1
+                continue
+            record = PathDensityRecord(
+                event_id=record.event_id,
+                points=result.segment.points,
+                target=AngularTarget(
+                    yaw=refined_case.target.yaw,
+                    pitch=refined_case.target.pitch,
+                    width_yaw=refined_case.target.width_yaw,
+                    width_pitch=refined_case.target.width_pitch,
+                ),
+                weight=record.weight,
             )
         records.append(record)
     return tuple(records), skipped
@@ -328,7 +383,7 @@ def _plot(
             axis.set_title(
                 f"{label} | n={len(paths)}, weight={sum(path_weights):.1f}\n"
                 f"median W_eff={median_width:.3f} deg, median ID={median_id:.3f}, "
-                f"visible={visible_ratio:.1%}\n"
+                f"in viewport={visible_ratio:.1%}\n"
                 f"median widths=(yaw {median_width_yaw:.3f}, "
                 f"pitch {median_width_pitch:.3f}) deg"
             )
@@ -364,13 +419,22 @@ def main() -> None:
 
     labels = args.labels or [path.name for path in args.sessions]
     backend = MinescriptMinerBackend("sigmadrift", args.config)
+    segmentation_config = None
+    if not args.no_segmentation:
+        segmentation_config = MovementSegmentationConfig(
+            max_idle_gap_ms=args.max_idle_gap_ms,
+            minimum_motion_ratio=args.minimum_motion_ratio,
+            max_player_displacement=args.max_player_displacement,
+        )
     datasets: list[tuple[str, tuple[AlignedPath, ...]]] = []
+    dataset_reports: list[dict[str, object]] = []
     for label, path in zip(labels, args.sessions):
         session = load_mining_session(path)
         records, skipped = _records_for_session(
             session,
             backend,
             eye_height=args.eye_height,
+            segmentation_config=segmentation_config,
         )
         aligned = align_paths(records)
         if not aligned:
@@ -384,6 +448,16 @@ def main() -> None:
         )
         if skipped:
             print("  skip reasons: " + ", ".join(f"{key}={value}" for key, value in sorted(skipped.items())))
+        dataset_reports.append(
+            {
+                "label": label,
+                "session": str(path.resolve()),
+                "input_events": len(session.events),
+                "valid_paths": len(aligned),
+                "valid_weight": sum(item.weight for item in aligned),
+                "skipped_reasons": skipped,
+            }
+        )
 
     edges = (
         _parse_edges(args.width_edges)
@@ -400,6 +474,29 @@ def main() -> None:
         plot_quantile=args.plot_quantile,
         show=args.show,
     )
+    report_path = args.output.with_suffix(".json")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report = {
+        "report_schema_version": 1,
+        "stratification": "effective_angular_target_width",
+        "effective_width_edges_deg": edges,
+        "coordinate_system": {
+            "start": [0.0, 0.0],
+            "target": [1.0, 0.0],
+            "normalized_by": "start_to_target_angular_distance",
+        },
+        "movement_segmentation": {
+            "enabled": segmentation_config is not None,
+            "config": asdict(segmentation_config) if segmentation_config else None,
+            "generated_sessions_are_not_resegmented": True,
+        },
+        "plot_quantile": args.plot_quantile,
+        "datasets": dataset_reports,
+    }
+    with report_path.open("w", encoding="utf-8") as file:
+        json.dump(report, file, indent=2, allow_nan=False)
+        file.write("\n")
+    print(f"Wrote {report_path.resolve()}")
 
 
 if __name__ == "__main__":

@@ -40,6 +40,7 @@ class GenerationCase:
     start_sample: StateSample
     target: TargetCondition
     angular_step_deg: float
+    start_source: str
 
 
 @dataclass(frozen=True)
@@ -72,12 +73,14 @@ def _session_id(
     source_session_id: str,
     generator: str,
     generator_config: Mapping[str, object],
+    preprocessing_metadata: Mapping[str, object],
 ) -> str:
     payload = json.dumps(
         {
             "source_session_id": source_session_id,
             "generator": generator,
             "generator_config": generator_config,
+            "preprocessing": preprocessing_metadata,
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -93,6 +96,7 @@ def write_generated_dataset(
     generator_config: Mapping[str, object],
     backend_metadata: Mapping[str, object],
     skipped_reasons: Mapping[str, int],
+    preprocessing_metadata: Mapping[str, object] | None = None,
 ) -> Path:
     if not trajectories:
         raise ValueError("cannot write a generated dataset without trajectories")
@@ -100,10 +104,12 @@ def write_generated_dataset(
     output_directory = output_directory.resolve()
     output_directory.mkdir(parents=True, exist_ok=False)
     first = trajectories[0]
+    preprocessing = dict(preprocessing_metadata or {})
     session_id = _session_id(
         first.case.source_session_id,
         first.generator,
         generator_config,
+        preprocessing,
     )
 
     event_fields = (
@@ -206,7 +212,7 @@ def write_generated_dataset(
                     "replicate_count": trajectory.replicate_count,
                     "analysis_weight": 1.0 / trajectory.replicate_count,
                     "seed": trajectory.seed,
-                    "start_source": "window_first_sample",
+                    "start_source": trajectory.case.start_source,
                     "target_condition": {
                         "yaw": trajectory.case.target.yaw,
                         "pitch": trajectory.case.target.pitch,
@@ -230,6 +236,7 @@ def write_generated_dataset(
         "backend": backend_metadata,
         "generated_event_count": len(trajectories),
         "skipped_reasons": dict(skipped_reasons),
+        "preprocessing": preprocessing,
         "field_sources": {
             "target_and_world_context": "human DAQ event",
             "camera_orientation": "path generator",

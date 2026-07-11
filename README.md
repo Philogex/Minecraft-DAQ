@@ -297,6 +297,35 @@ more than `0.05` blocks during the episode are excluded from the stationary
 cohort. Parameters are exposed by the CLI, and a JSON report next to the PNG
 records the configuration plus every invalidation reason and count.
 
+### Speed Density Comparison
+
+`tools/plot_speed_density.py` uses the same target reconstruction, movement
+segmentation, event weighting, and `W_eff` stratification as the spatial path
+plot:
+
+```bash
+PYTHONPATH=../Minescript-Miner/src python tools/plot_speed_density.py \
+  /path/to/mining-session \
+  /path/to/generated-session \
+  --label Human \
+  --label SigmaDrift \
+  --output build/analysis/human-vs-sigmadrift-speed-density.png
+```
+
+The x axis is normalized movement time from zero to one; the y axis retains
+physical angular speed in degrees per second. Each piecewise speed profile is
+interpolated onto the same time grid before aggregation. Consequently, a
+generator does not receive more density weight merely because it emits more
+samples than the 20 Hz DAQ state stream. Each path contributes equal total mass,
+and generated replicates retain their `1 / replicate_count` weights.
+
+The cyan curve is the weighted median speed across paths at each normalized
+time position. Density and median therefore retain dwell-time and velocity
+structure while remaining comparable across different movement durations. The
+shared y limit in each stratum defaults to the pooled 99th weighted speed
+percentile; the exact in-viewport fraction is shown and written to the adjacent
+JSON report.
+
 ## Future Datasets
 
 The project should stay task-oriented, but only mining is planned for the first

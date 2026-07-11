@@ -30,6 +30,7 @@ class AlignedPath:
     event_id: int
     x: tuple[float, ...]
     y: tuple[float, ...]
+    times_ms: tuple[float, ...]
     progress: tuple[float, ...]
     distance: float
     effective_width: float
@@ -99,6 +100,7 @@ def align_path(record: PathDensityRecord) -> AlignedPath | None:
         event_id=record.event_id,
         x=tuple(x),
         y=tuple(y),
+        times_ms=tuple(point.t_ms for point in record.points),
         progress=progress,
         distance=distance,
         effective_width=width,

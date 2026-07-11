@@ -40,6 +40,7 @@ from minescript_miner.adapter.native_bridge import (
 )
 from analysis.aim_features import (
     AimPathFeatures,
+    COMPARISON_FEATURE_NAMES,
     compute_aim_path_features,
     shortest_yaw_delta,
     unwrap_yaws,
@@ -247,21 +248,7 @@ def generate_paths(
     return paths
 
 
-FEATURE_NAMES = (
-    "fitts_mt",
-    "fitts_id",
-    "fitts_residual",
-    "fitts_residual_ratio",
-    "sub_peak_count",
-    "sub_primary_amp_ratio",
-    "sub_correction_onset",
-    "sub_interpeak_cv",
-    "sub_peak_speed_ratio",
-    "geo_path_efficiency",
-    "geo_max_deviation",
-    "geo_angular_dev_at_peak",
-    "geo_curvature_integral",
-)
+FEATURE_NAMES = COMPARISON_FEATURE_NAMES
 
 
 def compute_features_for_generator(

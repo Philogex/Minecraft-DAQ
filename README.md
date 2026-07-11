@@ -326,6 +326,37 @@ shared y limit in each stratum defaults to the pooled 99th weighted speed
 percentile; the exact in-viewport fraction is shown and written to the adjacent
 JSON report.
 
+### Kinematic Feature Distributions
+
+`tools/plot_feature_distributions.py` replaces the earlier single-path feature
+table with weighted, shared-bin histograms and median markers:
+
+```bash
+PYTHONPATH=../Minescript-Miner/src python tools/plot_feature_distributions.py \
+  /path/to/mining-session \
+  /path/to/generated-session \
+  --label Human \
+  --label SigmaDrift \
+  --output build/analysis/human-vs-sigmadrift-feature-distributions.png
+```
+
+The comparison implements the paper's complete clean set of 17 features: four
+Fitts features, five submovement features, four smoothness features, and four
+geometry features. The smoothness family (`smooth_jerk_rms`,
+`smooth_norm_jerk`, `smooth_ldlj`, and
+`smooth_curvature_change_rate`) follows the public
+`ck0i/sigmadrift-detector` formulas. Human smoothness and fine geometry use the
+high-rate raw mouse deltas reconstructed inside the tick-detected movement
+episode; state samples continue to define onset, player position, and target
+geometry.
+
+All datasets use identical bin edges per feature. Histograms show weighted
+counts rather than raw sample counts, and dashed lines plus legend values show
+weighted medians. Non-finite values are excluded per feature and their missing
+weight is retained in the adjacent JSON report. The default viewport covers the
+central 99 percent pooled weighted value mass without changing medians or other
+reported statistics.
+
 ## Future Datasets
 
 The project should stay task-oriented, but only mining is planned for the first

@@ -192,7 +192,13 @@ def _records_for_session(
                 continue
             record = PathDensityRecord(
                 event_id=record.event_id,
-                points=result.segment.points,
+                points=_reconstruct_mouse_path(
+                    recorded,
+                    result.segment.points,
+                    backend.angular_step_deg(
+                        recorded.state_samples[0].sensitivity
+                    ),
+                ),
                 target=AngularTarget(
                     yaw=refined_case.target.yaw,
                     pitch=refined_case.target.pitch,
@@ -203,6 +209,32 @@ def _records_for_session(
             )
         records.append(record)
     return tuple(records), skipped
+
+
+def _reconstruct_mouse_path(
+    recorded: RecordedMiningEvent,
+    state_segment: tuple[AimPoint, ...],
+    angular_step_deg: float,
+) -> tuple[AimPoint, ...]:
+    """Reconstruct a high-rate orientation path inside a tick-detected episode."""
+
+    start = state_segment[0]
+    end = state_segment[-1]
+    samples = tuple(
+        sample
+        for sample in recorded.mouse_samples
+        if start.t_ms < sample.relative_ms <= end.t_ms
+    )
+    if not samples:
+        return state_segment
+    points = [start]
+    yaw = start.yaw
+    pitch = start.pitch
+    for sample in samples:
+        yaw += sample.mouse_dx * angular_step_deg
+        pitch += sample.mouse_dy * angular_step_deg
+        points.append(AimPoint(yaw, pitch, sample.relative_ms))
+    return tuple(points)
 
 
 def _parse_edges(text: str) -> tuple[float, ...]:

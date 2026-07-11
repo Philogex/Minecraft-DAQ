@@ -6,6 +6,27 @@ import math
 from dataclasses import dataclass
 from typing import Sequence
 
+
+COMPARISON_FEATURE_NAMES = (
+    "fitts_mt",
+    "fitts_id",
+    "fitts_residual",
+    "fitts_residual_ratio",
+    "sub_peak_count",
+    "sub_primary_amp_ratio",
+    "sub_correction_onset",
+    "sub_interpeak_cv",
+    "sub_peak_speed_ratio",
+    "smooth_jerk_rms",
+    "smooth_norm_jerk",
+    "smooth_ldlj",
+    "smooth_curvature_change_rate",
+    "geo_path_efficiency",
+    "geo_max_deviation",
+    "geo_angular_dev_at_peak",
+    "geo_curvature_integral",
+)
+
 @dataclass(frozen=True)
 class AimPoint:
     """One orientation or cursor sample in a target-relative trajectory."""
@@ -38,6 +59,10 @@ class AimPathFeatures:
     sub_correction_onset: float
     sub_interpeak_cv: float
     sub_peak_speed_ratio: float
+    smooth_jerk_rms: float
+    smooth_norm_jerk: float
+    smooth_ldlj: float
+    smooth_curvature_change_rate: float
     geo_path_efficiency: float
     geo_max_deviation: float
     geo_angular_dev_at_peak: float
@@ -239,6 +264,113 @@ def _curvature_integral(series: AimPathSeries) -> float:
     return total
 
 
+def _gradient(values: Sequence[float], times: Sequence[float]) -> list[float]:
+    """Equivalent to NumPy's first-order gradient for non-uniform coordinates."""
+
+    if len(values) != len(times) or len(values) < 2:
+        return []
+    result = [(values[1] - values[0]) / (times[1] - times[0])]
+    for index in range(1, len(values) - 1):
+        previous_step = times[index] - times[index - 1]
+        next_step = times[index + 1] - times[index]
+        previous_scale = -next_step / (
+            previous_step * (previous_step + next_step)
+        )
+        center_scale = (next_step - previous_step) / (
+            previous_step * next_step
+        )
+        next_scale = previous_step / (next_step * (previous_step + next_step))
+        result.append(
+            previous_scale * values[index - 1]
+            + center_scale * values[index]
+            + next_scale * values[index + 1]
+        )
+    result.append((values[-1] - values[-2]) / (times[-1] - times[-2]))
+    return result
+
+
+def _smoothness_features(series: AimPathSeries) -> tuple[float, float, float, float]:
+    """Port the clean smoothness family from ck0i/sigmadrift-detector."""
+
+    if len(series.times_ms) < 6:
+        return 0.0, 0.0, 0.0, 0.0
+    times: list[float] = []
+    yaws: list[float] = []
+    pitches: list[float] = []
+    for time_ms, yaw, pitch in zip(
+        series.times_ms,
+        series.yaws,
+        series.pitches,
+    ):
+        time_s = time_ms / 1000.0
+        if times and time_s - times[-1] <= 1e-9:
+            continue
+        times.append(time_s)
+        yaws.append(yaw)
+        pitches.append(pitch)
+    if len(times) < 6:
+        return 0.0, 0.0, 0.0, 0.0
+
+    velocity_yaw = _gradient(yaws, times)
+    velocity_pitch = _gradient(pitches, times)
+    acceleration_yaw = _gradient(velocity_yaw, times)
+    acceleration_pitch = _gradient(velocity_pitch, times)
+    jerk_yaw = _gradient(acceleration_yaw, times)
+    jerk_pitch = _gradient(acceleration_pitch, times)
+    jerk_magnitude = [
+        math.hypot(yaw, pitch)
+        for yaw, pitch in zip(jerk_yaw, jerk_pitch)
+    ]
+    if not all(math.isfinite(value) for value in jerk_magnitude):
+        return 0.0, 0.0, 0.0, 0.0
+    jerk_rms = math.sqrt(
+        sum(value * value for value in jerk_magnitude) / len(jerk_magnitude)
+    )
+
+    movement_time = times[-1] - times[0]
+    distance = math.hypot(yaws[-1] - yaws[0], pitches[-1] - pitches[0])
+    jerk_integral = 0.0
+    for index in range(len(times) - 1):
+        jerk_pair = (
+            jerk_magnitude[index] * jerk_magnitude[index]
+            + jerk_magnitude[index + 1] * jerk_magnitude[index + 1]
+        )
+        jerk_integral += jerk_pair * (times[index + 1] - times[index]) / 4.0
+    if distance > 1.0 and movement_time > 0.001:
+        normalized_jerk_squared = (
+            jerk_integral * movement_time**5 / distance**2
+        )
+        normalized_jerk = math.sqrt(max(0.5 * normalized_jerk_squared, 0.0))
+        ldlj = -math.log(max(normalized_jerk_squared, 1e-30))
+    else:
+        normalized_jerk = 0.0
+        ldlj = 0.0
+
+    speed = [
+        math.hypot(yaw, pitch)
+        for yaw, pitch in zip(velocity_yaw, velocity_pitch)
+    ]
+    curvature = []
+    for vx, vy, ax, ay, magnitude in zip(
+        velocity_yaw,
+        velocity_pitch,
+        acceleration_yaw,
+        acceleration_pitch,
+        speed,
+    ):
+        safe_speed = magnitude if magnitude > 1e-6 else 1e-6
+        curvature.append(abs(vx * ay - vy * ax) / safe_speed**3)
+    curvature_derivative = _gradient(curvature, times)
+    curvature_change_rate = math.sqrt(
+        sum(value * value for value in curvature_derivative)
+        / len(curvature_derivative)
+    )
+    result = (jerk_rms, normalized_jerk, ldlj, curvature_change_rate)
+    if not all(math.isfinite(value) for value in result):
+        return 0.0, 0.0, 0.0, 0.0
+    return result
+
+
 def compute_aim_path_features(
     points: Sequence[AimPoint],
     target: TargetMetrics,
@@ -261,6 +393,10 @@ def compute_aim_path_features(
             sub_correction_onset=nan,
             sub_interpeak_cv=nan,
             sub_peak_speed_ratio=nan,
+            smooth_jerk_rms=nan,
+            smooth_norm_jerk=nan,
+            smooth_ldlj=nan,
+            smooth_curvature_change_rate=nan,
             geo_path_efficiency=nan,
             geo_max_deviation=nan,
             geo_angular_dev_at_peak=nan,
@@ -312,6 +448,12 @@ def compute_aim_path_features(
     primary_speed = peak_speeds[0] if peak_speeds else math.nan
     secondary_speed = max(peak_speeds[1:]) if len(peak_speeds) > 1 else math.nan
     path_length = _path_length(series)
+    (
+        smooth_jerk_rms,
+        smooth_norm_jerk,
+        smooth_ldlj,
+        smooth_curvature_change_rate,
+    ) = _smoothness_features(series)
 
     return AimPathFeatures(
         fitts_mt=movement_time,
@@ -324,6 +466,10 @@ def compute_aim_path_features(
         sub_correction_onset=_correction_onset(peaks, series.speeds_deg_s, series.speed_times_ms),
         sub_interpeak_cv=_coefficient_of_variation(interpeak_intervals),
         sub_peak_speed_ratio=_safe_ratio(secondary_speed, primary_speed),
+        smooth_jerk_rms=smooth_jerk_rms,
+        smooth_norm_jerk=smooth_norm_jerk,
+        smooth_ldlj=smooth_ldlj,
+        smooth_curvature_change_rate=smooth_curvature_change_rate,
         geo_path_efficiency=_safe_ratio(straight_distance, path_length),
         geo_max_deviation=_max_perpendicular_deviation(
             series,

@@ -28,6 +28,7 @@ if project_root not in sys.path:
 from analysis.aim_features import (
     AimPathFeatures,
     AimPoint,
+    COMPARISON_FEATURE_NAMES,
     TargetMetrics,
     compute_aim_path_features,
 )
@@ -35,7 +36,7 @@ from analysis.aim_features import (
 
 DEFAULT_DATASET = PROJECT_ROOT.parent / "Mouse-Dynamics-Challenge"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "build" / "aim-analysis" / "balabit"
-FEATURE_NAMES = tuple(AimPathFeatures.__dataclass_fields__)
+FEATURE_NAMES = COMPARISON_FEATURE_NAMES
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,10 @@ class SegmentFeatures:
     sub_correction_onset: float
     sub_interpeak_cv: float
     sub_peak_speed_ratio: float
+    smooth_jerk_rms: float
+    smooth_norm_jerk: float
+    smooth_ldlj: float
+    smooth_curvature_change_rate: float
     geo_path_efficiency: float
     geo_max_deviation: float
     geo_angular_dev_at_peak: float

@@ -224,6 +224,33 @@ intentionally diagnostic for now: camera yaw/pitch, tick-derived angular
 velocity, and raw mouse deltas before the block break. It does not yet infer a
 target angle or compute final trajectory features.
 
+### Paired Generator Datasets
+
+Generated reference datasets condition each path generator on the target
+selected by a human DAQ event. They compare motion generation only: target
+selection is deliberately held constant and is not evaluated by this dataset.
+
+Install a Minescript-Miner wheel in the analysis environment, then run:
+
+```bash
+python tools/generate_reference_paths.py \
+  /path/to/mining-session \
+  /path/to/generated-sigmadrift-session \
+  --generator sigmadrift \
+  --replicates 5 \
+  --config ../Minescript-Miner/aim_config.txt
+```
+
+The output is one DAQ-compatible batch session. Every generated event records
+its source event, deterministic seed, replicate index, reconstructed target
+width, and an analysis weight of `1 / replicate_count` in `metadata.json`.
+Thus every human target condition contributes total weight one per generator.
+
+The current first-stage generator uses the earliest state sample in the 1.5 s
+event window as its start orientation. This is explicitly marked as
+`window_first_sample`; movement-onset segmentation will replace that selection
+without changing the generator or batch format.
+
 ## Future Datasets
 
 The project should stay task-oriented, but only mining is planned for the first

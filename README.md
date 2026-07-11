@@ -251,6 +251,47 @@ event window as its start orientation. This is explicitly marked as
 `window_first_sample`; movement-onset segmentation will replace that selection
 without changing the generator or batch format.
 
+### Path Density Comparison
+
+`tools/plot_path_density.py` compares recorded and generated trajectories under
+the same target conditions:
+
+```bash
+PYTHONPATH=../Minescript-Miner/src python tools/plot_path_density.py \
+  /path/to/mining-session \
+  /path/to/generated-session \
+  --label Human \
+  --label SigmaDrift \
+  --output build/analysis/human-vs-sigmadrift-path-density.png
+```
+
+For a start-to-target movement vector `(dyaw, dpitch)`, the effective angular
+target width is the projection of the reconstructed angular target rectangle
+onto the movement axis:
+
+```text
+W_eff = sqrt((width_yaw * dyaw / D)^2 +
+             (width_pitch * dpitch / D)^2)
+D     = sqrt(dyaw^2 + dpitch^2)
+```
+
+Paths are rotated into a target-relative coordinate system and divided by `D`,
+so every panel has `start=(0, 0)` and `target=(1, 0)`. Automatic `W_eff` strata
+are weighted quantiles of the first session; use `--width-edges` for fixed,
+cross-run boundaries. Every human event has weight one, while all stochastic
+replicates of one generated event together have weight one. Every path also
+contributes equal total mass to its density regardless of sample count.
+
+The default viewport displays the central 95 percent weighted point mass with
+shared limits and color scaling inside each stratum. Panel titles report the
+visible fraction, medians of `W_eff`, Fitts ID, and the reconstructed yaw/pitch
+widths. Viewport clipping never removes paths from the statistics.
+
+The human plots currently include the complete 1.5 s pre-break recording
+window. They can therefore include motion toward previous blocks. A validated
+movement-onset segmentation stage is still required before interpreting the
+mean human path or treating these figures as final experimental results.
+
 ## Future Datasets
 
 The project should stay task-oriented, but only mining is planned for the first

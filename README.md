@@ -182,6 +182,48 @@ mouse_dy
 The center block is omitted because it is already represented by
 `block_state_before` and `block_state_after`.
 
+## Offline Analysis
+
+The Python analysis tools live here rather than in Minescript-Miner so that
+recorded human trajectories, reference datasets, and generated aim paths use
+the same feature definitions.
+
+`analysis/aim_features.py` contains the Fitts, submovement, and geometric
+feature extraction. It only depends on the Python standard library and works
+for both angular camera paths and screen-space cursor paths.
+
+`tools/analyze_balabit_mouse.py` imports the public
+`balabit/Mouse-Dynamics-Challenge` dataset once and writes `features.csv` plus
+a compact `summary.json`. Later plots read the summary instead of repeatedly
+processing the dataset.
+
+`tools/plot_aim_path.py` visualizes angular velocity, remaining target delta,
+and the same feature table for one or more Minescript-Miner path generators.
+It expects a sibling `Minescript-Miner` checkout by default; set
+`MINESCRIPT_MINER_ROOT` when it lives elsewhere. Plotting additionally needs
+matplotlib.
+
+```bash
+python tools/analyze_balabit_mouse.py --dataset ../Mouse-Dynamics-Challenge
+python tools/plot_aim_path.py --generator sigmadrift \
+  --reference-summary build/aim-analysis/balabit/summary.json
+```
+
+`analysis/mining_session.py` reads the three CSV files from one recorded
+`mining-*` or `synthetic-*` directory and joins them by `event_id`. An optional
+`metadata.json` marks synthetic recordings and documents derived or placeholder
+fields. The first recording viewer uses that loader directly:
+
+```bash
+python tools/plot_mining_trajectory.py /path/to/mining-20260706-235935-62867abbad76 \
+  --event-id 1
+```
+
+It writes `analysis/event-<id>.png` below the recording directory. The graph is
+intentionally diagnostic for now: camera yaw/pitch, tick-derived angular
+velocity, and raw mouse deltas before the block break. It does not yet infer a
+target angle or compute final trajectory features.
+
 ## Future Datasets
 
 The project should stay task-oriented, but only mining is planned for the first

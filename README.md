@@ -348,7 +348,10 @@ geometry features. The smoothness family (`smooth_jerk_rms`,
 `ck0i/sigmadrift-detector` formulas. Human smoothness and fine geometry use the
 high-rate raw mouse deltas reconstructed inside the tick-detected movement
 episode; state samples continue to define onset, player position, and target
-geometry.
+geometry. Because no pre-delta mouse timestamp exists, the initial orientation
+sample is placed one local median mouse interval before the first delta (clamped
+to `4..50 ms`). This prevents an arbitrary sub-millisecond tick/frame offset
+from creating a false first-sample velocity and jerk spike.
 
 All datasets use identical bin edges per feature. Histograms show weighted
 counts rather than raw sample counts, and dashed lines plus legend values show

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import statistics
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -32,6 +33,15 @@ from analysis.path_density import (
     quantile_edges,
     weighted_quantile,
 )
+
+
+MOUSE_PATH_RECONSTRUCTION = {
+    "source": "raw_mouse_deltas_inside_tick_detected_episode",
+    "pre_first_delta_timestamp": "first_delta_time_minus_local_median_interval",
+    "fallback_interval_ms": 1000.0 / 60.0,
+    "minimum_interval_ms": 4.0,
+    "maximum_interval_ms": 50.0,
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -227,7 +237,28 @@ def _reconstruct_mouse_path(
     )
     if not samples:
         return state_segment
-    points = [start]
+    intervals = [
+        second.relative_ms - first.relative_ms
+        for first, second in zip(samples, samples[1:])
+        if second.relative_ms > first.relative_ms
+    ]
+    typical_interval_ms = (
+        statistics.median(intervals)
+        if intervals
+        else MOUSE_PATH_RECONSTRUCTION["fallback_interval_ms"]
+    )
+    typical_interval_ms = min(
+        MOUSE_PATH_RECONSTRUCTION["maximum_interval_ms"],
+        max(MOUSE_PATH_RECONSTRUCTION["minimum_interval_ms"], typical_interval_ms),
+    )
+    inferred_start_ms = samples[0].relative_ms - typical_interval_ms
+    points = [
+        AimPoint(
+            start.yaw,
+            start.pitch,
+            min(start.t_ms, inferred_start_ms),
+        )
+    ]
     yaw = start.yaw
     pitch = start.pitch
     for sample in samples:
@@ -523,6 +554,7 @@ def main() -> None:
             "generated_sessions_are_not_resegmented": True,
         },
         "plot_quantile": args.plot_quantile,
+        "human_trajectory_reconstruction": MOUSE_PATH_RECONSTRUCTION,
         "datasets": dataset_reports,
     }
     with report_path.open("w", encoding="utf-8") as file:

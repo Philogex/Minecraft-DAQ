@@ -26,7 +26,11 @@ from analysis.path_density import (
     quantile_edges,
     weighted_quantile,
 )
-from tools.plot_path_density import _parse_edges, _records_for_session
+from tools.plot_path_density import (
+    MOUSE_PATH_RECONSTRUCTION,
+    _parse_edges,
+    _records_for_session,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -374,6 +378,7 @@ def main() -> None:
         },
         "speed_quantile": args.speed_quantile,
         "time_samples": args.time_samples,
+        "human_trajectory_reconstruction": MOUSE_PATH_RECONSTRUCTION,
         "datasets": dataset_reports,
         "panels": panels,
     }

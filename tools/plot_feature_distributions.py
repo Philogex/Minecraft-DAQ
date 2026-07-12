@@ -26,7 +26,7 @@ from analysis.minescript_miner_backend import MinescriptMinerBackend
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import MovementSegmentationConfig
 from analysis.path_density import AlignedPath, align_paths, weighted_quantile
-from tools.plot_path_density import _records_for_session
+from tools.plot_path_density import MOUSE_PATH_RECONSTRUCTION, _records_for_session
 
 
 def parse_args() -> argparse.Namespace:
@@ -358,6 +358,7 @@ def main() -> None:
             "generated_sessions_are_not_resegmented": True,
         },
         "value_quantile": args.value_quantile,
+        "human_trajectory_reconstruction": MOUSE_PATH_RECONSTRUCTION,
         "datasets": dataset_reports,
         "features": feature_reports,
     }

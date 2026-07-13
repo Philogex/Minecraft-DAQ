@@ -193,9 +193,11 @@ feature extraction. It only depends on the Python standard library and works
 for both angular camera paths and screen-space cursor paths.
 
 `tools/analyze_balabit_mouse.py` imports the public
-`balabit/Mouse-Dynamics-Challenge` dataset once and writes `features.csv` plus
-a compact `summary.json`. Later plots read the summary instead of repeatedly
-processing the dataset.
+`balabit/Mouse-Dynamics-Challenge` dataset once and writes `features.csv`, a
+compact `summary.json`, and `paths.json.gz`. The last file is a deterministic
+reservoir sample of target-aligned, resampled paths for cross-domain motion
+plots. Later plots read these outputs instead of repeatedly processing the raw
+dataset.
 
 `tools/plot_aim_path.py` visualizes angular velocity, remaining target delta,
 and the same feature table for one or more Minescript-Miner path generators.
@@ -379,6 +381,49 @@ weighted medians. Non-finite values are excluded per feature and their missing
 weight is retained in the adjacent JSON report. The default viewport covers the
 central 99 percent pooled weighted value mass without changing medians or other
 reported statistics.
+
+An external feature reference can be added to the same figure:
+
+```bash
+PYTHONPATH=../Minescript-Miner/src python tools/plot_feature_distributions.py \
+  /path/to/mining-session \
+  /path/to/generated-session \
+  --label Human \
+  --label SigmaDrift \
+  --reference-features build/aim-analysis/balabit/features.csv \
+  --reference-label Balabit \
+  --output build/analysis/human-vs-sigmadrift-vs-balabit-features.png
+```
+
+Balabit uses screen pixels and has no recorded target geometry. Its
+`fitts_id`, residuals, raw jerk RMS, curvature-change rate, and absolute maximum
+deviation are therefore omitted from the shared figure. Movement time,
+submovement ratios/counts, dimensionless jerk, path efficiency, angular heading
+deviation, and curvature integral remain comparable. Balabit's pause-separated
+segment endpoint is only a proxy for user intent, not an observed UI target.
+
+### Cross-Domain Motion Reference
+
+`tools/plot_motion_reference.py` compares path and speed shape without mixing
+Minecraft degrees and Balabit pixels:
+
+```bash
+PYTHONPATH=../Minescript-Miner/src python tools/plot_motion_reference.py \
+  /path/to/mining-session \
+  /path/to/generated-session \
+  --label Human \
+  --label SigmaDrift \
+  --reference-paths build/aim-analysis/balabit/paths.json.gz \
+  --reference-label Balabit \
+  --output build/analysis/human-vs-sigmadrift-vs-balabit-motion.png
+```
+
+Every path is rotated and scaled to `start=(0, 0)` and
+`target/segment-endpoint=(1, 0)`. Speed is divided by `D / movement_time`, so
+the lower panels describe temporal speed shape rather than degrees or pixels
+per second. No `W_eff` stratification is applied because Balabit contains no
+target width. The default spatial viewport contains the central 95 percent
+weighted point mass; omitted tails remain represented in the JSON report.
 
 ### Face Hit Distribution
 

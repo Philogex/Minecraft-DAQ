@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import sys
@@ -27,6 +28,23 @@ from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import MovementSegmentationConfig
 from analysis.path_density import AlignedPath, align_paths, weighted_quantile
 from tools.plot_path_density import MOUSE_PATH_RECONSTRUCTION, _records_for_session
+
+
+UNIT_INDEPENDENT_REFERENCE_FEATURES = frozenset(
+    {
+        "fitts_mt",
+        "sub_peak_count",
+        "sub_primary_amp_ratio",
+        "sub_correction_onset",
+        "sub_interpeak_cv",
+        "sub_peak_speed_ratio",
+        "smooth_norm_jerk",
+        "smooth_ldlj",
+        "geo_path_efficiency",
+        "geo_angular_dev_at_peak",
+        "geo_curvature_integral",
+    }
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -54,6 +72,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fitts-b-ms", type=float)
     parser.add_argument("--eye-height", type=float, default=1.62)
     parser.add_argument("--config", type=Path, help="Minescript-Miner aim config.")
+    parser.add_argument(
+        "--reference-features",
+        action="append",
+        type=Path,
+        help="External feature CSV; repeat for multiple references.",
+    )
+    parser.add_argument(
+        "--reference-label",
+        action="append",
+        help="Label for --reference-features; repeat in the same order.",
+    )
     parser.add_argument("--no-segmentation", action="store_true")
     parser.add_argument("--max-idle-gap-ms", type=float, default=150.0)
     parser.add_argument("--minimum-motion-ratio", type=float, default=0.1)
@@ -95,6 +124,23 @@ def _features_for_path(
         name: float(getattr(features, name))
         for name in COMPARISON_FEATURE_NAMES
     }
+
+
+def _load_reference_features(path: Path) -> list[dict[str, float]]:
+    rows: list[dict[str, float]] = []
+    with path.open("r", encoding="utf-8", newline="") as file:
+        for row in csv.DictReader(file):
+            values: dict[str, float] = {}
+            for name in COMPARISON_FEATURE_NAMES:
+                if name not in UNIT_INDEPENDENT_REFERENCE_FEATURES:
+                    values[name] = math.nan
+                    continue
+                try:
+                    values[name] = float(row[name])
+                except (KeyError, TypeError, ValueError):
+                    values[name] = math.nan
+            rows.append(values)
+    return rows
 
 
 def _feature_range(
@@ -274,6 +320,12 @@ def main() -> None:
     args = parse_args()
     if args.labels is not None and len(args.labels) != len(args.sessions):
         raise SystemExit("repeat --label exactly once per session")
+    reference_paths = args.reference_features or []
+    reference_labels = args.reference_label or []
+    if len(reference_paths) != len(reference_labels):
+        raise SystemExit(
+            "repeat --reference-label exactly once per --reference-features"
+        )
     if args.histogram_bins <= 1:
         raise SystemExit("--histogram-bins must be greater than one")
     if not 0.0 < args.value_quantile <= 1.0:
@@ -339,6 +391,36 @@ def main() -> None:
             f"{sum(skipped.values())} skipped"
         )
 
+    reference_weight = float(dataset_reports[0]["valid_weight"])
+    omitted_reference_features = sorted(
+        set(COMPARISON_FEATURE_NAMES) - UNIT_INDEPENDENT_REFERENCE_FEATURES
+    )
+    for label, path in zip(reference_labels, reference_paths):
+        feature_values = _load_reference_features(path)
+        if not feature_values:
+            raise SystemExit(f"{path}: no reference feature rows")
+        row_weight = reference_weight / len(feature_values)
+        datasets.append(
+            {
+                "label": label,
+                "features": [(values, row_weight) for values in feature_values],
+            }
+        )
+        dataset_reports.append(
+            {
+                "label": label,
+                "source": str(path.resolve()),
+                "input_rows": len(feature_values),
+                "valid_weight": reference_weight,
+                "row_weight": row_weight,
+                "omitted_incomparable_features": omitted_reference_features,
+            }
+        )
+        print(
+            f"{label}: {len(feature_values)} reference rows; omitted "
+            + ", ".join(omitted_reference_features)
+        )
+
     feature_reports = _plot(
         datasets,
         args.output,
@@ -359,6 +441,9 @@ def main() -> None:
         },
         "value_quantile": args.value_quantile,
         "human_trajectory_reconstruction": MOUSE_PATH_RECONSTRUCTION,
+        "external_reference_comparable_features": sorted(
+            UNIT_INDEPENDENT_REFERENCE_FEATURES
+        ),
         "datasets": dataset_reports,
         "features": feature_reports,
     }

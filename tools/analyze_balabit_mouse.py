@@ -13,6 +13,7 @@ import argparse
 import csv
 import json
 import math
+import random
 import statistics
 import sys
 from dataclasses import asdict, dataclass
@@ -31,6 +32,11 @@ from analysis.aim_features import (
     COMPARISON_FEATURE_NAMES,
     TargetMetrics,
     compute_aim_path_features,
+)
+from analysis.reference_motion import (
+    NormalizedMotionPath,
+    normalize_endpoint_motion,
+    write_reference_paths,
 )
 
 
@@ -124,6 +130,14 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Optional cap for quick experiments. 0 means no cap.",
     )
+    parser.add_argument(
+        "--path-sample-count",
+        type=int,
+        default=5000,
+        help="Deterministic reservoir size written to paths.json.gz.",
+    )
+    parser.add_argument("--path-points", type=int, default=101)
+    parser.add_argument("--path-seed", type=int, default=0xB41AB17)
     return parser.parse_args()
 
 
@@ -304,7 +318,12 @@ def write_features_csv(path: Path, rows: Sequence[SegmentFeatures]) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.path_sample_count < 0 or args.path_points < 2:
+        raise SystemExit("--path-sample-count must be non-negative and --path-points >= 2")
     rows: list[SegmentFeatures] = []
+    reference_paths: list[NormalizedMotionPath] = []
+    reference_candidates = 0
+    random_generator = random.Random(args.path_seed)
     scanned_sessions = 0
     skipped_segments = 0
     for split, path in iter_session_paths(args.dataset, args.split):
@@ -330,6 +349,23 @@ def main() -> None:
                     fitts_b_ms=args.fitts_b_ms,
                 )
             )
+            if args.path_sample_count > 0:
+                reference_candidates += 1
+                reservoir_index = (
+                    len(reference_paths)
+                    if len(reference_paths) < args.path_sample_count
+                    else random_generator.randrange(reference_candidates)
+                )
+                if reservoir_index < args.path_sample_count:
+                    normalized = normalize_endpoint_motion(
+                        segment_to_points(segment),
+                        sample_count=args.path_points,
+                    )
+                    if normalized is not None:
+                        if reservoir_index == len(reference_paths):
+                            reference_paths.append(normalized)
+                        else:
+                            reference_paths[reservoir_index] = normalized
             if args.max_segments > 0 and len(rows) >= args.max_segments:
                 break
         if args.max_segments > 0 and len(rows) >= args.max_segments:
@@ -338,7 +374,23 @@ def main() -> None:
     output_dir = args.output_dir
     features_path = output_dir / "features.csv"
     summary_path = output_dir / "summary.json"
+    paths_path = output_dir / "paths.json.gz"
     write_features_csv(features_path, rows)
+    write_reference_paths(
+        paths_path,
+        reference_paths,
+        {
+            "source": "balabit/Mouse-Dynamics-Challenge",
+            "split": args.split,
+            "sampling": "deterministic_reservoir",
+            "seed": args.path_seed,
+            "candidate_count": reference_candidates,
+            "path_count": len(reference_paths),
+            "points_per_path": args.path_points,
+            "spatial_normalization": "start=(0,0), segment_endpoint=(1,0)",
+            "speed_normalization": "speed / (endpoint_distance / movement_time)",
+        },
+    )
     summary = {
         "source": "balabit/Mouse-Dynamics-Challenge",
         "dataset": str(args.dataset),
@@ -356,6 +408,9 @@ def main() -> None:
             "target_width_px": args.target_width_px,
             "fitts_a_ms": args.fitts_a_ms,
             "fitts_b_ms": args.fitts_b_ms,
+            "path_sample_count": args.path_sample_count,
+            "path_points": args.path_points,
+            "path_seed": args.path_seed,
         },
         "session_count": scanned_sessions,
         "segment_count": len(rows),
@@ -368,6 +423,7 @@ def main() -> None:
 
     print(f"Wrote {features_path}")
     print(f"Wrote {summary_path}")
+    print(f"Wrote {paths_path}")
     print(
         "Analyzed "
         f"{len(rows)} segments from {scanned_sessions} sessions "

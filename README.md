@@ -353,12 +353,70 @@ sample is placed one local median mouse interval before the first delta (clamped
 to `4..50 ms`). This prevents an arbitrary sub-millisecond tick/frame offset
 from creating a false first-sample velocity and jerk spike.
 
+The plotted feature names have the following meanings:
+
+- `fitts_mt`: observed movement time in milliseconds.
+- `fitts_id`: Fitts index of difficulty, `log2(D / W_eff + 1)`.
+- `fitts_residual`: observed minus Fitts-predicted movement time.
+- `fitts_residual_ratio`: residual divided by predicted movement time.
+- `sub_peak_count`: number of speed peaks above the relative peak threshold.
+- `sub_primary_amp_ratio`: amplitude reached at the primary speed peak, divided by `D`.
+- `sub_correction_onset`: estimated first correction onset time in milliseconds.
+- `sub_interpeak_cv`: coefficient of variation of intervals between speed peaks.
+- `sub_peak_speed_ratio`: secondary-to-primary peak-speed ratio.
+- `smooth_jerk_rms`: root-mean-square magnitude of trajectory jerk.
+- `smooth_norm_jerk`: dimensionless jerk normalized by duration and amplitude.
+- `smooth_ldlj`: log dimensionless jerk; larger values indicate smoother motion.
+- `smooth_curvature_change_rate`: RMS time derivative of path curvature.
+- `geo_path_efficiency`: straight-line distance divided by traveled path length.
+- `geo_max_deviation`: maximum perpendicular distance from the direct path.
+- `geo_angular_dev_at_peak`: heading error at maximum movement speed, in degrees.
+- `geo_curvature_integral`: accumulated absolute heading change along the path.
+
 All datasets use identical bin edges per feature. Histograms show weighted
 counts rather than raw sample counts, and dashed lines plus legend values show
 weighted medians. Non-finite values are excluded per feature and their missing
 weight is retained in the adjacent JSON report. The default viewport covers the
 central 99 percent pooled weighted value mass without changing medians or other
 reported statistics.
+
+### Face Hit Distribution
+
+`tools/plot_face_hit_distribution.py` shows where the final raycast intersects
+each of the six target-block faces:
+
+```bash
+python tools/plot_face_hit_distribution.py /path/to/mining-session \
+  --output build/analysis/face-hit-distribution.png
+```
+
+Hit coordinates are translated into block-local `[0, 1]` coordinates while
+retaining the corresponding world axes: north/south use `(x, y)`, east/west
+use `(z, y)`, and up/down use `(x, z)`. Opposite faces are deliberately not
+mirrored. Density is normalized independently per face so that spatial bias on
+rare faces remains visible; titles separately report each face's absolute count
+and share of all valid hits. The cyan cross marks the median hit coordinate.
+
+### Concatenated Movement Timeline
+
+`tools/plot_concatenated_timeline.py` places every valid segmented movement
+episode directly after the previous one:
+
+```bash
+PYTHONPATH=../Minescript-Miner/src python tools/plot_concatenated_timeline.py \
+  /path/to/mining-session \
+  /path/to/generated-session \
+  --label Human \
+  --label SigmaDrift \
+  --output build/analysis/human-vs-sigmadrift-timeline.png
+```
+
+The plot removes real-world idle gaps between mining events but preserves every
+episode's physical duration. One panel shows angular speed in degrees per
+second; the other shows remaining angular target delta divided by the original
+start-to-target distance. Line breaks and faint separators identify event
+boundaries. This view is intended to expose repeated temporal shapes,
+correction phases, and generator resets that aggregate density plots can hide.
 
 ## Future Datasets
 

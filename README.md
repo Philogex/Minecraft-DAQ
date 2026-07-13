@@ -226,6 +226,30 @@ intentionally diagnostic for now: camera yaw/pitch, tick-derived angular
 velocity, and raw mouse deltas before the block break. It does not yet infer a
 target angle or compute final trajectory features.
 
+### Grouped Sessions
+
+The aggregate path, speed, feature, timeline, and cross-domain reference
+plotters can combine multiple recording directories in memory without changing
+or copying their CSV files. Use one `--dataset` per plotted method or cohort:
+
+```bash
+PYTHONPATH=../Minescript-Miner/src python tools/plot_path_density.py \
+  --dataset Human /recordings/human-1 /recordings/human-2 \
+  --dataset SigmaDrift /generated/sigma-1 /generated/sigma-2 \
+  --output build/analysis/grouped-path-density.png
+```
+
+Each session is loaded and validated independently before its paths are added
+to the group. Local `event_id` values may therefore overlap safely, generated
+replicate weights remain unchanged, and the JSON report retains per-session
+input counts and invalidation reasons below the aggregate group totals. Session
+order is preserved by the concatenated timeline. The older positional syntax
+remains available as a shorthand for one session per independently plotted
+dataset; it must not be mixed with `--dataset` in the same command.
+
+The face-hit plot has no method comparison axis. Supplying multiple positional
+sessions pools all their hit points into its one distribution.
+
 ### Paired Generator Datasets
 
 Generated reference datasets condition each path generator on the target

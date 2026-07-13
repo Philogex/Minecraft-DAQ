@@ -23,6 +23,7 @@ from analysis.aim_features import (
     TargetMetrics,
     compute_aim_path_features,
 )
+from analysis.dataset_groups import add_dataset_arguments, resolve_dataset_groups
 from analysis.minescript_miner_backend import MinescriptMinerBackend
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import MovementSegmentationConfig
@@ -54,8 +55,7 @@ def parse_args() -> argparse.Namespace:
             "formerly shown in the single-path summary table."
         )
     )
-    parser.add_argument("sessions", nargs="+", type=Path)
-    parser.add_argument("--label", action="append", dest="labels")
+    add_dataset_arguments(parser)
     parser.add_argument(
         "--output",
         type=Path,
@@ -318,8 +318,6 @@ def _plot(
 
 def main() -> None:
     args = parse_args()
-    if args.labels is not None and len(args.labels) != len(args.sessions):
-        raise SystemExit("repeat --label exactly once per session")
     reference_paths = args.reference_features or []
     reference_labels = args.reference_label or []
     if len(reference_paths) != len(reference_labels):
@@ -331,7 +329,7 @@ def main() -> None:
     if not 0.0 < args.value_quantile <= 1.0:
         raise SystemExit("--value-quantile must be in (0, 1]")
 
-    labels = args.labels or [path.name for path in args.sessions]
+    groups = resolve_dataset_groups(args.sessions, args.labels, args.dataset)
     backend = MinescriptMinerBackend("sigmadrift", args.config)
     fitts_a_ms = (
         args.fitts_a_ms
@@ -353,42 +351,73 @@ def main() -> None:
 
     datasets: list[dict[str, object]] = []
     dataset_reports: list[dict[str, object]] = []
-    for label, path in zip(labels, args.sessions):
-        session = load_mining_session(path)
-        records, skipped = _records_for_session(
-            session,
-            backend,
-            eye_height=args.eye_height,
-            segmentation_config=segmentation_config,
-        )
-        aligned = align_paths(records)
-        if not aligned:
-            raise SystemExit(f"{path}: no valid paths")
-        feature_rows = [
-            (
-                _features_for_path(
-                    item,
-                    fitts_a_ms=fitts_a_ms,
-                    fitts_b_ms=fitts_b_ms,
-                ),
-                item.weight,
+    for group in groups:
+        feature_rows: list[tuple[dict[str, float], float]] = []
+        group_skipped: dict[str, int] = {}
+        session_reports: list[dict[str, object]] = []
+        input_events = 0
+        valid_paths = 0
+        valid_weight = 0.0
+        for path in group.sessions:
+            session = load_mining_session(path)
+            records, skipped = _records_for_session(
+                session,
+                backend,
+                eye_height=args.eye_height,
+                segmentation_config=segmentation_config,
             )
-            for item in aligned
-        ]
-        datasets.append({"label": label, "features": feature_rows})
+            aligned = align_paths(records)
+            alignment_failures = len(records) - len(aligned)
+            session_skipped = dict(skipped)
+            if alignment_failures:
+                session_skipped["alignment_failed"] = alignment_failures
+            for reason, count in session_skipped.items():
+                group_skipped[reason] = group_skipped.get(reason, 0) + count
+            feature_rows.extend(
+                (
+                    _features_for_path(
+                        item,
+                        fitts_a_ms=fitts_a_ms,
+                        fitts_b_ms=fitts_b_ms,
+                    ),
+                    item.weight,
+                )
+                for item in aligned
+            )
+            session_weight = sum(item.weight for item in aligned)
+            valid_paths += len(aligned)
+            valid_weight += session_weight
+            input_events += len(session.events)
+            session_reports.append(
+                {
+                    "session": str(path.resolve()),
+                    "input_events": len(session.events),
+                    "valid_paths": len(aligned),
+                    "valid_weight": session_weight,
+                    "skipped_reasons": session_skipped,
+                }
+            )
+        if not feature_rows:
+            raise SystemExit(f"{group.label}: no valid paths")
+        datasets.append({"label": group.label, "features": feature_rows})
         dataset_reports.append(
             {
-                "label": label,
-                "session": str(path.resolve()),
-                "input_events": len(session.events),
-                "valid_paths": len(aligned),
-                "valid_weight": sum(item.weight for item in aligned),
-                "skipped_reasons": skipped,
+                "label": group.label,
+                "session": (
+                    str(group.sessions[0].resolve())
+                    if len(group.sessions) == 1
+                    else None
+                ),
+                "sessions": session_reports,
+                "input_events": input_events,
+                "valid_paths": valid_paths,
+                "valid_weight": valid_weight,
+                "skipped_reasons": group_skipped,
             }
         )
         print(
-            f"{label}: {len(aligned)} valid paths, "
-            f"{sum(skipped.values())} skipped"
+            f"{group.label}: {valid_paths} valid paths from "
+            f"{len(group.sessions)} session(s), {sum(group_skipped.values())} skipped"
         )
 
     reference_weight = float(dataset_reports[0]["valid_weight"])

@@ -17,6 +17,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from analysis.minescript_miner_backend import MinescriptMinerBackend
+from analysis.dataset_groups import add_dataset_arguments, resolve_dataset_groups
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import MovementSegmentationConfig
 from analysis.path_density import AlignedPath, align_paths, weighted_quantile
@@ -31,8 +32,7 @@ def parse_args() -> argparse.Namespace:
             "remaining target delta over cumulative active movement time."
         )
     )
-    parser.add_argument("sessions", nargs="+", type=Path)
-    parser.add_argument("--label", action="append", dest="labels")
+    add_dataset_arguments(parser)
     parser.add_argument(
         "--output", type=Path, default=Path("concatenated-timeline.png")
     )
@@ -243,12 +243,10 @@ def _plot(
 
 def main() -> None:
     args = parse_args()
-    if args.labels is not None and len(args.labels) != len(args.sessions):
-        raise SystemExit("repeat --label exactly once per session")
     if not 0.0 < args.speed_quantile <= 1.0:
         raise SystemExit("--speed-quantile must be in (0, 1]")
 
-    labels = args.labels or [path.name for path in args.sessions]
+    groups = resolve_dataset_groups(args.sessions, args.labels, args.dataset)
     backend = MinescriptMinerBackend("sigmadrift", args.config)
     segmentation_config = None
     if not args.no_segmentation:
@@ -260,31 +258,59 @@ def main() -> None:
 
     datasets: list[tuple[str, tuple[AlignedPath, ...]]] = []
     dataset_reports: list[dict[str, object]] = []
-    for label, path in zip(labels, args.sessions):
-        session = load_mining_session(path)
-        records, skipped = _records_for_session(
-            session,
-            backend,
-            eye_height=args.eye_height,
-            segmentation_config=segmentation_config,
-        )
-        aligned = align_paths(records)
-        if not aligned:
-            raise SystemExit(f"{path}: no valid paths")
-        datasets.append((label, aligned))
+    for group in groups:
+        group_aligned: list[AlignedPath] = []
+        group_skipped: dict[str, int] = {}
+        session_reports: list[dict[str, object]] = []
+        input_events = 0
+        for path in group.sessions:
+            session = load_mining_session(path)
+            records, skipped = _records_for_session(
+                session,
+                backend,
+                eye_height=args.eye_height,
+                segmentation_config=segmentation_config,
+            )
+            aligned = align_paths(records)
+            alignment_failures = len(records) - len(aligned)
+            session_skipped = dict(skipped)
+            if alignment_failures:
+                session_skipped["alignment_failed"] = alignment_failures
+            for reason, count in session_skipped.items():
+                group_skipped[reason] = group_skipped.get(reason, 0) + count
+            group_aligned.extend(aligned)
+            input_events += len(session.events)
+            session_reports.append(
+                {
+                    "session": str(path.resolve()),
+                    "input_events": len(session.events),
+                    "valid_paths": len(aligned),
+                    "valid_weight": sum(item.weight for item in aligned),
+                    "skipped_reasons": session_skipped,
+                }
+            )
+        if not group_aligned:
+            raise SystemExit(f"{group.label}: no valid paths")
+        aligned_group = tuple(group_aligned)
+        datasets.append((group.label, aligned_group))
         dataset_reports.append(
             {
-                "label": label,
-                "session": str(path.resolve()),
-                "input_events": len(session.events),
-                "valid_paths": len(aligned),
-                "valid_weight": sum(item.weight for item in aligned),
-                "skipped_reasons": skipped,
+                "label": group.label,
+                "session": (
+                    str(group.sessions[0].resolve())
+                    if len(group.sessions) == 1
+                    else None
+                ),
+                "sessions": session_reports,
+                "input_events": input_events,
+                "valid_paths": len(aligned_group),
+                "valid_weight": sum(item.weight for item in aligned_group),
+                "skipped_reasons": group_skipped,
             }
         )
         print(
-            f"{label}: {len(aligned)} valid paths, "
-            f"{sum(skipped.values())} skipped"
+            f"{group.label}: {len(aligned_group)} valid paths from "
+            f"{len(group.sessions)} session(s), {sum(group_skipped.values())} skipped"
         )
 
     panels = _plot(

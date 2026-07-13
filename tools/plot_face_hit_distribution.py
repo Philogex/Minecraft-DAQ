@@ -48,7 +48,12 @@ def parse_args() -> argparse.Namespace:
             "by hit face."
         )
     )
-    parser.add_argument("session", type=Path)
+    parser.add_argument(
+        "sessions",
+        nargs="+",
+        type=Path,
+        help="One or more DAQ sessions pooled into one face distribution.",
+    )
     parser.add_argument(
         "--output", type=Path, default=Path("face-hit-distribution.png")
     )
@@ -223,31 +228,46 @@ def main() -> None:
     args = parse_args()
     if args.histogram_bins <= 1:
         raise SystemExit("--histogram-bins must be greater than one")
-    session = load_mining_session(args.session)
+    sessions = [load_mining_session(path) for path in args.sessions]
     hits = tuple(
         hit
+        for session in sessions
         for recorded in session.events
         if (hit := _face_hit(recorded.event)) is not None
     )
     if not hits:
-        raise SystemExit(f"{args.session}: no valid face hit points")
-    invalid_count = len(session.events) - len(hits)
+        raise SystemExit("input sessions contain no valid face hit points")
+    input_events = sum(len(session.events) for session in sessions)
+    invalid_count = input_events - len(hits)
     print(
-        f"{args.session.name}: {len(hits)} valid face hits, "
+        f"{len(args.sessions)} session(s): {len(hits)} valid face hits, "
         f"{invalid_count} invalid or missing"
     )
     faces = _plot(
         hits,
         args.output,
         histogram_bins=args.histogram_bins,
-        session_name=args.session.name,
+        session_name=(
+            args.sessions[0].name
+            if len(args.sessions) == 1
+            else f"{len(args.sessions)} pooled sessions"
+        ),
         show=args.show,
     )
     report = {
         "report_schema_version": 1,
         "plot": "block_local_face_hit_distribution",
-        "session": str(args.session.resolve()),
-        "input_events": len(session.events),
+        "session": (
+            str(args.sessions[0].resolve()) if len(args.sessions) == 1 else None
+        ),
+        "sessions": [
+            {
+                "session": str(path.resolve()),
+                "input_events": len(session.events),
+            }
+            for path, session in zip(args.sessions, sessions)
+        ],
+        "input_events": input_events,
         "valid_hits": len(hits),
         "invalid_or_missing_hits": invalid_count,
         "coordinate_system": "block-local world axes in [0, 1]",

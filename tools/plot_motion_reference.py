@@ -17,6 +17,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from analysis.minescript_miner_backend import MinescriptMinerBackend
+from analysis.dataset_groups import add_dataset_arguments, resolve_dataset_groups
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import MovementSegmentationConfig
 from analysis.path_density import align_paths, weighted_quantile
@@ -35,8 +36,7 @@ def parse_args() -> argparse.Namespace:
             "without mixing degrees and pixels."
         )
     )
-    parser.add_argument("sessions", nargs="+", type=Path)
-    parser.add_argument("--label", action="append", dest="labels")
+    add_dataset_arguments(parser)
     parser.add_argument("--reference-paths", action="append", type=Path)
     parser.add_argument("--reference-label", action="append")
     parser.add_argument(
@@ -227,11 +227,9 @@ def _plot(datasets, output: Path, *, histogram_bins: int, plot_quantile: float,
 
 def main() -> None:
     args = parse_args()
-    labels = args.labels or [path.name for path in args.sessions]
+    groups = resolve_dataset_groups(args.sessions, args.labels, args.dataset)
     reference_paths = args.reference_paths or []
     reference_labels = args.reference_label or []
-    if len(labels) != len(args.sessions):
-        raise SystemExit("repeat --label exactly once per session")
     if len(reference_paths) != len(reference_labels):
         raise SystemExit("repeat --reference-label exactly once per reference")
     if args.histogram_bins <= 1:
@@ -251,23 +249,60 @@ def main() -> None:
         )
     datasets = []
     dataset_reports = []
-    for label, path in zip(labels, args.sessions):
-        session = load_mining_session(path)
-        records, skipped = _records_for_session(
-            session, backend, eye_height=args.eye_height,
-            segmentation_config=segmentation_config,
-        )
-        aligned = align_paths(records)
-        normalized = _normalized_dataset(aligned)
-        if not normalized:
-            raise SystemExit(f"{path}: no valid normalized paths")
-        metadata = {"source": str(path.resolve()), "skipped_reasons": skipped}
-        datasets.append((label, normalized, metadata))
+    for group in groups:
+        group_normalized: list[tuple[NormalizedMotionPath, float]] = []
+        group_skipped: dict[str, int] = {}
+        session_reports: list[dict[str, object]] = []
+        input_events = 0
+        for path in group.sessions:
+            session = load_mining_session(path)
+            records, skipped = _records_for_session(
+                session,
+                backend,
+                eye_height=args.eye_height,
+                segmentation_config=segmentation_config,
+            )
+            aligned = align_paths(records)
+            normalized = _normalized_dataset(aligned)
+            session_skipped = dict(skipped)
+            alignment_failures = len(records) - len(aligned)
+            normalization_failures = len(aligned) - len(normalized)
+            if alignment_failures:
+                session_skipped["alignment_failed"] = alignment_failures
+            if normalization_failures:
+                session_skipped["normalization_failed"] = normalization_failures
+            for reason, count in session_skipped.items():
+                group_skipped[reason] = group_skipped.get(reason, 0) + count
+            group_normalized.extend(normalized)
+            input_events += len(session.events)
+            session_reports.append(
+                {
+                    "session": str(path.resolve()),
+                    "input_events": len(session.events),
+                    "path_count": len(normalized),
+                    "path_weight": sum(weight for _, weight in normalized),
+                    "skipped_reasons": session_skipped,
+                }
+            )
+        if not group_normalized:
+            raise SystemExit(f"{group.label}: no valid normalized paths")
+        normalized_group = tuple(group_normalized)
+        metadata = {"sessions": session_reports, "skipped_reasons": group_skipped}
+        datasets.append((group.label, normalized_group, metadata))
         dataset_reports.append(
-            {"label": label, "input_events": len(session.events),
-             "path_count": len(normalized), "skipped_reasons": skipped}
+            {
+                "label": group.label,
+                "sessions": session_reports,
+                "input_events": input_events,
+                "path_count": len(normalized_group),
+                "path_weight": sum(weight for _, weight in normalized_group),
+                "skipped_reasons": group_skipped,
+            }
         )
-        print(f"{label}: {len(normalized)} normalized paths")
+        print(
+            f"{group.label}: {len(normalized_group)} normalized paths from "
+            f"{len(group.sessions)} session(s)"
+        )
     reference_weight = sum(weight for _, weight in datasets[0][1])
     for label, path in zip(reference_labels, reference_paths):
         paths, metadata = load_reference_paths(path)

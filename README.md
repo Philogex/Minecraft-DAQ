@@ -406,7 +406,22 @@ weight is retained in the adjacent JSON report. The default viewport covers the
 central 99 percent pooled weighted value mass without changing medians or other
 reported statistics.
 
-An external feature reference can be added to the same figure:
+The Balabit cache is generated in two intent classes. Click-terminated motion
+runs form `with-intent`; runs terminated by a pause, another action, or the end
+of a session form `without-intent`. Both use the paper-aligned filters of at
+least 100 px endpoint distance, no intra-run pause above 200 ms, and path
+efficiency above 0.5:
+
+```bash
+python tools/analyze_balabit_mouse.py --intent-class with-intent
+python tools/analyze_balabit_mouse.py --intent-class without-intent
+```
+
+The click wait itself is not included in movement time. Balabit does not expose
+the clicked UI element or its dimensions, so even `with-intent` has an observed
+click endpoint but no known target width.
+
+Both external feature references can be added to the same figure:
 
 ```bash
 PYTHONPATH=../Minescript-Miner/src python tools/plot_feature_distributions.py \
@@ -414,17 +429,20 @@ PYTHONPATH=../Minescript-Miner/src python tools/plot_feature_distributions.py \
   /path/to/generated-session \
   --label Human \
   --label SigmaDrift \
-  --reference-features build/aim-analysis/balabit/features.csv \
-  --reference-label Balabit \
-  --output build/analysis/human-vs-sigmadrift-vs-balabit-features.png
+  --reference-features build/aim-analysis/balabit/with-intent/features.csv \
+  --reference-label "Balabit with intent" \
+  --reference-features build/aim-analysis/balabit/without-intent/features.csv \
+  --reference-label "Balabit without intent" \
+  --output build/analysis/human-vs-sigmadrift-vs-balabit-intent-features.png
 ```
 
 Balabit uses screen pixels and has no recorded target geometry. Its
 `fitts_id`, residuals, raw jerk RMS, curvature-change rate, and absolute maximum
 deviation are therefore omitted from the shared figure. Movement time,
 submovement ratios/counts, dimensionless jerk, path efficiency, angular heading
-deviation, and curvature integral remain comparable. Balabit's pause-separated
-segment endpoint is only a proxy for user intent, not an observed UI target.
+deviation, and curvature integral remain comparable. The `with-intent` endpoint
+is the final cursor position before a click; the `without-intent` endpoint is
+only the end of the observed motion run.
 
 ### Cross-Domain Motion Reference
 
@@ -437,9 +455,11 @@ PYTHONPATH=../Minescript-Miner/src python tools/plot_motion_reference.py \
   /path/to/generated-session \
   --label Human \
   --label SigmaDrift \
-  --reference-paths build/aim-analysis/balabit/paths.json.gz \
-  --reference-label Balabit \
-  --output build/analysis/human-vs-sigmadrift-vs-balabit-motion.png
+  --reference-paths build/aim-analysis/balabit/with-intent/paths.json.gz \
+  --reference-label "Balabit with intent" \
+  --reference-paths build/aim-analysis/balabit/without-intent/paths.json.gz \
+  --reference-label "Balabit without intent" \
+  --output build/analysis/human-vs-sigmadrift-vs-balabit-intent-motion.png
 ```
 
 Every path is rotated and scaled to `start=(0, 0)` and

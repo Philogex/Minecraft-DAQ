@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Precompute Balabit mouse trajectory feature references.
+"""Precompute intent-separated Balabit trajectory references.
 
-The Balabit data set does not include explicit UI targets.  For this analysis
-each pause-separated movement segment treats its final cursor position as the
-intended endpoint.  That keeps the kinematic and geometric features useful as a
-human-motion reference, while Fitts values remain model-based approximations.
+Balabit records clicks but not UI target geometry.  A movement run followed by
+a click is therefore treated as target-directed; all other runs form a separate
+free-motion reference.  The final cursor position remains only an endpoint
+proxy, so target-width-dependent features are not exported as comparable data.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ from analysis.reference_motion import (
 
 
 DEFAULT_DATASET = PROJECT_ROOT.parent / "Mouse-Dynamics-Challenge"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "build" / "aim-analysis" / "balabit"
+DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "build" / "aim-analysis" / "balabit"
 FEATURE_NAMES = COMPARISON_FEATURE_NAMES
 
 
@@ -55,8 +55,15 @@ class MouseSample:
 
 
 @dataclass(frozen=True)
+class MotionSegment:
+    samples: tuple[MouseSample, ...]
+    intent_class: str
+
+
+@dataclass(frozen=True)
 class SegmentFeatures:
     split: str
+    intent_class: str
     user: str
     session: str
     segment_index: int
@@ -110,20 +117,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=DEFAULT_OUTPUT_DIR,
-        help="Directory for features.csv and summary.json.",
+        help=(
+            "Directory for features.csv, summary.json and paths.json.gz. "
+            "Defaults to build/aim-analysis/balabit/<intent-class>."
+        ),
+    )
+    parser.add_argument(
+        "--intent-class",
+        choices=("with-intent", "without-intent"),
+        default="with-intent",
+        help="Select click-terminated or non-click-terminated movement runs.",
     )
     parser.add_argument("--min-samples", type=int, default=5)
-    parser.add_argument("--min-distance-px", type=float, default=16.0)
-    parser.add_argument("--pause-threshold-ms", type=float, default=250.0)
+    parser.add_argument("--min-distance-px", type=float, default=100.0)
+    parser.add_argument("--pause-threshold-ms", type=float, default=200.0)
+    parser.add_argument("--min-path-efficiency", type=float, default=0.5)
     parser.add_argument(
         "--target-width-px",
         type=float,
-        default=16.0,
+        default=30.0,
         help="Approximate endpoint width used for Fitts features.",
     )
-    parser.add_argument("--fitts-a-ms", type=float, default=0.0)
-    parser.add_argument("--fitts-b-ms", type=float, default=100.0)
+    parser.add_argument("--fitts-a-ms", type=float, default=200.0)
+    parser.add_argument("--fitts-b-ms", type=float, default=260.0)
     parser.add_argument(
         "--max-segments",
         type=int,
@@ -186,36 +202,66 @@ def read_session(path: Path) -> list[MouseSample]:
                 button=row.get("button", ""),
                 state=row.get("state", ""),
             )
-            if samples and math.isclose(sample.t_ms, samples[-1].t_ms):
-                samples[-1] = sample
-            elif not samples or sample.t_ms > samples[-1].t_ms:
+            # Equal timestamps can carry a final Move and its following click.
+            # Preserve both so intent classification remains possible.
+            if not samples or sample.t_ms >= samples[-1].t_ms:
                 samples.append(sample)
     return samples
 
 
-def split_segments(
+def _is_motion(sample: MouseSample) -> bool:
+    return sample.state.casefold() == "move"
+
+
+def _is_click(sample: MouseSample) -> bool:
+    return (
+        sample.state.casefold() == "pressed"
+        and sample.button.casefold() in {"left", "middle", "right"}
+    )
+
+
+def classify_motion_segments(
     samples: Sequence[MouseSample],
     *,
     pause_threshold_ms: float,
-) -> Iterable[list[MouseSample]]:
+) -> Iterable[MotionSegment]:
     current: list[MouseSample] = []
-    previous_time: float | None = None
     for sample in samples:
-        if (
-            current
-            and previous_time is not None
-            and sample.t_ms - previous_time > pause_threshold_ms
-        ):
-            yield current
+        if _is_motion(sample):
+            if current and sample.t_ms - current[-1].t_ms > pause_threshold_ms:
+                yield MotionSegment(tuple(current), "without-intent")
+                current = []
+            if current and math.isclose(sample.t_ms, current[-1].t_ms):
+                current[-1] = sample
+            elif not current or sample.t_ms > current[-1].t_ms:
+                current.append(sample)
+            continue
+
+        if _is_click(sample):
+            if current:
+                yield MotionSegment(tuple(current), "with-intent")
+                current = []
+            continue
+
+        # Dragging, scrolling, and other actions terminate free cursor motion.
+        if current and sample.state.casefold() not in {"released"}:
+            yield MotionSegment(tuple(current), "without-intent")
             current = []
-        current.append(sample)
-        previous_time = sample.t_ms
+
     if current:
-        yield current
+        yield MotionSegment(tuple(current), "without-intent")
 
 
 def segment_distance(segment: Sequence[MouseSample]) -> float:
     return math.hypot(segment[-1].x - segment[0].x, segment[-1].y - segment[0].y)
+
+
+def segment_path_efficiency(segment: Sequence[MouseSample]) -> float:
+    path_length = sum(
+        math.hypot(current.x - previous.x, current.y - previous.y)
+        for previous, current in zip(segment, segment[1:])
+    )
+    return segment_distance(segment) / path_length if path_length > 0.0 else 0.0
 
 
 def segment_to_points(segment: Sequence[MouseSample]) -> tuple[AimPoint, ...]:
@@ -228,6 +274,7 @@ def segment_to_points(segment: Sequence[MouseSample]) -> tuple[AimPoint, ...]:
 
 def analyze_segment(
     split: str,
+    intent_class: str,
     session_path: Path,
     segment_index: int,
     segment: Sequence[MouseSample],
@@ -254,6 +301,7 @@ def analyze_segment(
     )
     return SegmentFeatures(
         split=split,
+        intent_class=intent_class,
         user=session_path.parent.name,
         session=session_path.name,
         segment_index=segment_index,
@@ -325,22 +373,38 @@ def main() -> None:
     reference_candidates = 0
     random_generator = random.Random(args.path_seed)
     scanned_sessions = 0
-    skipped_segments = 0
+    classified_counts = {"with-intent": 0, "without-intent": 0}
+    skipped_reasons = {
+        "too_few_samples": 0,
+        "distance_below_minimum": 0,
+        "path_efficiency_below_minimum": 0,
+    }
     for split, path in iter_session_paths(args.dataset, args.split):
         scanned_sessions += 1
         samples = read_session(path)
-        for segment_index, segment in enumerate(
-            split_segments(samples, pause_threshold_ms=args.pause_threshold_ms)
+        for segment_index, classified in enumerate(
+            classify_motion_segments(
+                samples,
+                pause_threshold_ms=args.pause_threshold_ms,
+            )
         ):
+            classified_counts[classified.intent_class] += 1
+            if classified.intent_class != args.intent_class:
+                continue
+            segment = classified.samples
             if len(segment) < args.min_samples:
-                skipped_segments += 1
+                skipped_reasons["too_few_samples"] += 1
                 continue
             if segment_distance(segment) < args.min_distance_px:
-                skipped_segments += 1
+                skipped_reasons["distance_below_minimum"] += 1
+                continue
+            if segment_path_efficiency(segment) <= args.min_path_efficiency:
+                skipped_reasons["path_efficiency_below_minimum"] += 1
                 continue
             rows.append(
                 analyze_segment(
                     split,
+                    classified.intent_class,
                     path,
                     segment_index,
                     segment,
@@ -371,7 +435,7 @@ def main() -> None:
         if args.max_segments > 0 and len(rows) >= args.max_segments:
             break
 
-    output_dir = args.output_dir
+    output_dir = args.output_dir or DEFAULT_OUTPUT_ROOT / args.intent_class
     features_path = output_dir / "features.csv"
     summary_path = output_dir / "summary.json"
     paths_path = output_dir / "paths.json.gz"
@@ -382,6 +446,7 @@ def main() -> None:
         {
             "source": "balabit/Mouse-Dynamics-Challenge",
             "split": args.split,
+            "intent_class": args.intent_class,
             "sampling": "deterministic_reservoir",
             "seed": args.path_seed,
             "candidate_count": reference_candidates,
@@ -395,16 +460,21 @@ def main() -> None:
         "source": "balabit/Mouse-Dynamics-Challenge",
         "dataset": str(args.dataset),
         "split": args.split,
+        "intent_class": args.intent_class,
         "assumptions": {
-            "target": "pause-separated segment endpoint",
+            "target": "movement endpoint before click"
+            if args.intent_class == "with-intent"
+            else "non-click-terminated movement endpoint",
             "coordinate_space": "screen pixels",
             "wrap_yaw": False,
-            "duplicate_timestamps": "last sample wins",
+            "duplicate_timestamps": "events preserved; duplicate Move samples collapse",
+            "click_wait": "excluded from movement duration",
         },
         "parameters": {
             "min_samples": args.min_samples,
             "min_distance_px": args.min_distance_px,
             "pause_threshold_ms": args.pause_threshold_ms,
+            "min_path_efficiency": args.min_path_efficiency,
             "target_width_px": args.target_width_px,
             "fitts_a_ms": args.fitts_a_ms,
             "fitts_b_ms": args.fitts_b_ms,
@@ -413,8 +483,10 @@ def main() -> None:
             "path_seed": args.path_seed,
         },
         "session_count": scanned_sessions,
+        "classified_segment_counts": classified_counts,
         "segment_count": len(rows),
-        "skipped_segment_count": skipped_segments,
+        "skipped_segment_count": sum(skipped_reasons.values()),
+        "skipped_reasons": skipped_reasons,
         "features": summarize(rows),
     }
     with summary_path.open("w") as file:
@@ -427,7 +499,7 @@ def main() -> None:
     print(
         "Analyzed "
         f"{len(rows)} segments from {scanned_sessions} sessions "
-        f"({skipped_segments} skipped)."
+        f"for {args.intent_class} ({sum(skipped_reasons.values())} skipped)."
     )
 
 

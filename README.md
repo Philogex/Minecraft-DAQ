@@ -398,7 +398,9 @@ The plotted feature names have the following meanings:
 - `smooth_norm_jerk`: dimensionless jerk normalized by duration and amplitude.
 - `smooth_ldlj`: log dimensionless jerk; larger values indicate smoother motion.
 - `smooth_curvature_change_rate`: RMS time derivative of path curvature.
-- `geo_path_efficiency`: straight-line distance divided by traveled path length.
+- `geo_path_efficiency`: observed start-to-end displacement divided by traveled
+  path length. The nominal target center remains separate, so valid off-center
+  endpoints inside a reconstructed target region cannot produce values above one.
 - `geo_max_deviation`: maximum perpendicular distance from the direct path.
 - `geo_angular_dev_at_peak`: heading error at maximum movement speed, in degrees.
 - `geo_curvature_integral`: accumulated absolute heading change along the path.

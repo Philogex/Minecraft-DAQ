@@ -448,6 +448,10 @@ def compute_aim_path_features(
     primary_speed = peak_speeds[0] if peak_speeds else math.nan
     secondary_speed = max(peak_speeds[1:]) if len(peak_speeds) > 1 else math.nan
     path_length = _path_length(series)
+    endpoint_distance = math.hypot(
+        series.yaws[-1] - series.yaws[0],
+        series.pitches[-1] - series.pitches[0],
+    )
     (
         smooth_jerk_rms,
         smooth_norm_jerk,
@@ -470,7 +474,7 @@ def compute_aim_path_features(
         smooth_norm_jerk=smooth_norm_jerk,
         smooth_ldlj=smooth_ldlj,
         smooth_curvature_change_rate=smooth_curvature_change_rate,
-        geo_path_efficiency=_safe_ratio(straight_distance, path_length),
+        geo_path_efficiency=_safe_ratio(endpoint_distance, path_length),
         geo_max_deviation=_max_perpendicular_deviation(
             series,
             start_yaw,

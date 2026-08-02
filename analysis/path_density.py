@@ -22,6 +22,7 @@ class PathDensityRecord:
     event_id: int
     points: tuple[AimPoint, ...]
     target: AngularTarget
+    effective_width: float | None = None
     weight: float = 1.0
 
 
@@ -67,12 +68,14 @@ def align_path(record: PathDensityRecord) -> AlignedPath | None:
     movement_yaw = shortest_yaw_delta(start.yaw, record.target.yaw)
     movement_pitch = record.target.pitch - start.pitch
     distance = math.hypot(movement_yaw, movement_pitch)
-    width = effective_target_width(
-        movement_yaw,
-        movement_pitch,
-        record.target.width_yaw,
-        record.target.width_pitch,
-    )
+    width = record.effective_width
+    if width is None or not math.isfinite(width) or width <= 0.0:
+        width = effective_target_width(
+            movement_yaw,
+            movement_pitch,
+            record.target.width_yaw,
+            record.target.width_pitch,
+        )
     if distance <= 0.0 or not math.isfinite(width):
         return None
 

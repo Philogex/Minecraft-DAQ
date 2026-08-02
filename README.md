@@ -267,6 +267,10 @@ python tools/generate_reference_paths.py \
   --config ../Minescript-Miner/aim_config.txt
 ```
 
+Use `--generator geometry_feedback_sigmadrift` to generate the paired
+geometry-feedback cohort. It receives the same reconstructed effective width
+and complete visible convex components as the live Minescript-Miner path.
+
 The output is one DAQ-compatible batch session. Every generated event records
 its source event, deterministic seed, replicate index, reconstructed target
 width, and an analysis weight of `1 / replicate_count` in `metadata.json`.

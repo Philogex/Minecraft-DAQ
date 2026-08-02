@@ -109,6 +109,10 @@ def _record_from_generated(
             width_yaw=float(target["width_yaw"]),
             width_pitch=float(target["width_pitch"]),
         )
+        raw_effective_width = target.get("effective_width")
+        effective_width = (
+            None if raw_effective_width is None else float(raw_effective_width)
+        )
         weight = float(metadata.get("analysis_weight", 1.0))
     except (KeyError, TypeError, ValueError):
         return None
@@ -119,6 +123,7 @@ def _record_from_generated(
             for sample in recorded.state_samples
         ),
         target=angular_target,
+        effective_width=effective_width,
         weight=weight,
     )
 
@@ -166,6 +171,7 @@ def _records_for_session(
                     width_yaw=case.target.width_yaw,
                     width_pitch=case.target.width_pitch,
                 ),
+                effective_width=case.effective_width,
             )
         if segmentation_config is not None and not is_generated:
             result = segment_target_movement(
@@ -210,6 +216,7 @@ def _records_for_session(
                     width_yaw=refined_case.target.width_yaw,
                     width_pitch=refined_case.target.width_pitch,
                 ),
+                effective_width=refined_case.effective_width,
                 weight=record.weight,
             )
         records.append(record)

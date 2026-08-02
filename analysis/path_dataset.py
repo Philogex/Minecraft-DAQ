@@ -39,6 +39,10 @@ class GenerationCase:
     source_event: MiningEvent
     start_sample: StateSample
     target: TargetCondition
+    effective_width: float
+    visible_components: tuple[
+        tuple[tuple[float, float, float], ...], ...
+    ]
     angular_step_deg: float
     start_source: str
 
@@ -218,6 +222,10 @@ def write_generated_dataset(
                         "pitch": trajectory.case.target.pitch,
                         "width_yaw": trajectory.case.target.width_yaw,
                         "width_pitch": trajectory.case.target.width_pitch,
+                        "effective_width": trajectory.case.effective_width,
+                        "visible_component_count": len(
+                            trajectory.case.visible_components
+                        ),
                         "distance": trajectory.case.target.distance,
                         "width_source": trajectory.case.target.width_source,
                     },

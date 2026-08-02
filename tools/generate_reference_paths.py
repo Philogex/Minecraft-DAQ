@@ -114,21 +114,27 @@ def main() -> None:
             except GenerationCaseError as error:
                 skipped[error.reason] += 1
                 continue
-        for replicate_index in range(args.replicates):
-            seed = deterministic_seed(
-                session.session_id,
-                recorded.event.event_id,
-                backend.generator,
-                replicate_index,
-            )
-            trajectories.append(
-                backend.generate(
-                    case,
-                    replicate_index=replicate_index,
-                    replicate_count=args.replicates,
-                    seed=seed,
+        generated_case = []
+        try:
+            for replicate_index in range(args.replicates):
+                seed = deterministic_seed(
+                    session.session_id,
+                    recorded.event.event_id,
+                    backend.generator,
+                    replicate_index,
                 )
-            )
+                generated_case.append(
+                    backend.generate(
+                        case,
+                        replicate_index=replicate_index,
+                        replicate_count=args.replicates,
+                        seed=seed,
+                    )
+                )
+        except GenerationCaseError as error:
+            skipped[error.reason] += 1
+            continue
+        trajectories.extend(generated_case)
 
     if not trajectories:
         reasons = ", ".join(f"{name}={count}" for name, count in sorted(skipped.items()))

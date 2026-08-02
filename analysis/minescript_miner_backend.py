@@ -196,6 +196,8 @@ class MinescriptMinerBackend:
             hit_point=hit,
             block_state_before=event.block_state_before,
             neighbors=tuple(neighbor_states),
+            effective_width=reconstructed.effective_width,
+            visible_components=reconstructed.visible_components,
         )
         return GenerationCase(
             source_session_id=source_session_id,
@@ -209,6 +211,8 @@ class MinescriptMinerBackend:
                 distance=target_metrics.distance,
                 width_source="local_26_neighbor_reconstruction",
             ),
+            effective_width=target_metrics.effective_width,
+            visible_components=target_metrics.visible_components,
             angular_step_deg=angular_step,
             start_source=start_source,
         )
@@ -227,6 +231,8 @@ class MinescriptMinerBackend:
             width_yaw=case.target.width_yaw,
             width_pitch=case.target.width_pitch,
             distance=case.target.distance,
+            effective_width=case.effective_width,
+            visible_components=case.visible_components,
         )
         points = self._aim.generate_aim_path(
             (case.start_sample.yaw, case.start_sample.pitch),
@@ -235,6 +241,11 @@ class MinescriptMinerBackend:
             angular_step_deg=case.angular_step_deg,
             seed=seed,
         )
+        if len(points) < 2:
+            raise GenerationCaseError(
+                "generator_rejected_target_region",
+                "path generator rejected the reconstructed target region",
+            )
         return GeneratedTrajectory(
             case=case,
             generator=self.generator,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -55,6 +55,7 @@ class GeneratedTrajectory:
     replicate_count: int
     seed: int
     points: tuple[PathPoint, ...]
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 def deterministic_seed(
@@ -229,6 +230,7 @@ def write_generated_dataset(
                         "distance": trajectory.case.target.distance,
                         "width_source": trajectory.case.target.width_source,
                     },
+                    "generator_diagnostics": dict(trajectory.diagnostics),
                 }
             )
 

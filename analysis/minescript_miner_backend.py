@@ -234,13 +234,14 @@ class MinescriptMinerBackend:
             effective_width=case.effective_width,
             visible_components=case.visible_components,
         )
-        points = self._aim.generate_aim_path(
+        generation = self._aim.generate_aim_path_with_diagnostics(
             (case.start_sample.yaw, case.start_sample.pitch),
             target,
             self.config,
             angular_step_deg=case.angular_step_deg,
             seed=seed,
         )
+        points = generation.points
         if len(points) < 2:
             raise GenerationCaseError(
                 "generator_rejected_target_region",
@@ -253,4 +254,9 @@ class MinescriptMinerBackend:
             replicate_count=replicate_count,
             seed=seed,
             points=tuple(PathPoint(point.yaw, point.pitch, point.t_ms) for point in points),
+            diagnostics=(
+                asdict(generation.diagnostics)
+                if generation.diagnostics is not None
+                else {}
+            ),
         )

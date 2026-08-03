@@ -276,6 +276,24 @@ its source event, deterministic seed, replicate index, reconstructed target
 width, and an analysis weight of `1 / replicate_count` in `metadata.json`.
 Thus every human target condition contributes total weight one per generator.
 
+Geometry-feedback cohorts additionally record exact controller diagnostics per
+event. These include feedback checks and correction impulses, first entry into
+the visible and margin-inset target regions, subsequent exits/re-entries, final
+membership, the chosen motor anchor, and the actually applicable safe margin.
+They are deliberately kept separate from the 17 method-neutral trajectory
+features. Plot one or more diagnostic cohorts with:
+
+```bash
+python tools/plot_feedback_diagnostics.py \
+  --dataset GeometryFeedback /generated/geometry-feedback-session \
+  --output build/analysis/geometry-feedback-diagnostics.png
+```
+
+The adjacent JSON file preserves weighted distributions and summary values.
+Ordinary live path generation does not collect these diagnostics; only the
+analysis-specific generator call performs the additional region membership
+checks for every emitted sample.
+
 By default, the generator detects the final stationary-player movement episode
 inside the 1.5 s window and uses its onset as the generated path's initial
 condition. The metadata records `detected_movement_onset`, all segmentation

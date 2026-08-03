@@ -34,7 +34,10 @@ class MinescriptMinerBackend:
                 TargetMetrics,
                 acquire_target_metrics,
             )
-            from minescript_miner.adapter.shape_catalog import DEFAULT_CATALOG
+            from minescript_miner.adapter.shape_catalog import (
+                DEFAULT_CATALOG,
+                SHAPE_ID_BY_NAME,
+            )
         except ImportError as error:
             raise RuntimeError(
                 "Minescript-Miner is not importable; install its wheel or use "
@@ -50,6 +53,7 @@ class MinescriptMinerBackend:
         self._TargetMetrics = TargetMetrics
         self._acquire_target_metrics = acquire_target_metrics
         self._catalog = DEFAULT_CATALOG
+        self._full_cube_shape_id = SHAPE_ID_BY_NAME["full_cube"]
         self._max_cube_side = MAX_CUBE_SIDE
 
     @property
@@ -92,6 +96,89 @@ class MinescriptMinerBackend:
             for y in (block[1], block[1] + 1)
             for z in (block[2], block[2] + 1)
         )
+
+    @staticmethod
+    def _look_direction(yaw: float, pitch: float) -> tuple[float, float, float]:
+        yaw_radians = math.radians(yaw)
+        pitch_radians = math.radians(pitch)
+        pitch_cosine = math.cos(pitch_radians)
+        return (
+            -math.sin(yaw_radians) * pitch_cosine,
+            -math.sin(pitch_radians),
+            math.cos(yaw_radians) * pitch_cosine,
+        )
+
+    @classmethod
+    def _raycast_full_cube(
+        cls,
+        eye: tuple[float, float, float],
+        yaw: float,
+        pitch: float,
+        block: tuple[int, int, int],
+    ) -> dict[str, object]:
+        direction = cls._look_direction(yaw, pitch)
+        minimum = tuple(float(coordinate) for coordinate in block)
+        maximum = tuple(coordinate + 1.0 for coordinate in minimum)
+        negative_faces = ("west", "down", "north")
+        positive_faces = ("east", "up", "south")
+        entry_t = -math.inf
+        exit_t = math.inf
+        entry_face: str | None = None
+        exit_face: str | None = None
+        epsilon = 1.0e-12
+
+        for axis in range(3):
+            axis_direction = direction[axis]
+            if abs(axis_direction) <= epsilon:
+                if eye[axis] < minimum[axis] or eye[axis] > maximum[axis]:
+                    return {
+                        "status": "miss",
+                        "geometry_source": "full_cube_aabb",
+                    }
+                continue
+            first_t = (minimum[axis] - eye[axis]) / axis_direction
+            second_t = (maximum[axis] - eye[axis]) / axis_direction
+            if first_t <= second_t:
+                near_t = first_t
+                far_t = second_t
+                near_face = negative_faces[axis]
+                far_face = positive_faces[axis]
+            else:
+                near_t = second_t
+                far_t = first_t
+                near_face = positive_faces[axis]
+                far_face = negative_faces[axis]
+            if near_t > entry_t:
+                entry_t = near_t
+                entry_face = near_face
+            if far_t < exit_t:
+                exit_t = far_t
+                exit_face = far_face
+            if exit_t < entry_t:
+                return {
+                    "status": "miss",
+                    "geometry_source": "full_cube_aabb",
+                }
+
+        outside = entry_t >= 0.0
+        hit_t = entry_t if outside else exit_t
+        hit_face = entry_face if outside else exit_face
+        if hit_face is None or hit_t < 0.0 or not math.isfinite(hit_t):
+            return {
+                "status": "miss",
+                "geometry_source": "full_cube_aabb",
+            }
+        hit = tuple(
+            eye[axis] + direction[axis] * hit_t for axis in range(3)
+        )
+        return {
+            "status": "hit",
+            "geometry_source": "full_cube_aabb",
+            "face_id": hit_face,
+            "hit_x": hit[0],
+            "hit_y": hit[1],
+            "hit_z": hit[2],
+        }
 
     def prepare_case(
         self,
@@ -215,6 +302,7 @@ class MinescriptMinerBackend:
             visible_components=target_metrics.visible_components,
             angular_step_deg=angular_step,
             start_source=start_source,
+            eye_position=eye,
         )
 
     def generate(
@@ -247,6 +335,25 @@ class MinescriptMinerBackend:
                 "generator_rejected_target_region",
                 "path generator rejected the reconstructed target region",
             )
+        target_shape_id = self._catalog.shape_id(
+            case.source_event.block_state_before
+        )
+        if target_shape_id == self._full_cube_shape_id:
+            endpoint_hit = self._raycast_full_cube(
+                case.eye_position,
+                points[-1].yaw,
+                points[-1].pitch,
+                (
+                    case.source_event.target_x,
+                    case.source_event.target_y,
+                    case.source_event.target_z,
+                ),
+            )
+        else:
+            endpoint_hit = {
+                "status": "unsupported_target_shape",
+                "shape_id": target_shape_id,
+            }
         return GeneratedTrajectory(
             case=case,
             generator=self.generator,
@@ -259,4 +366,5 @@ class MinescriptMinerBackend:
                 if generation.diagnostics is not None
                 else {}
             ),
+            endpoint_hit=endpoint_hit,
         )

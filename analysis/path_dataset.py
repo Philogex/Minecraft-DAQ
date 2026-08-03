@@ -45,6 +45,7 @@ class GenerationCase:
     ]
     angular_step_deg: float
     start_source: str
+    eye_position: tuple[float, float, float]
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,7 @@ class GeneratedTrajectory:
     seed: int
     points: tuple[PathPoint, ...]
     diagnostics: Mapping[str, object] = field(default_factory=dict)
+    endpoint_hit: Mapping[str, object] = field(default_factory=dict)
 
 
 def deterministic_seed(
@@ -231,6 +233,7 @@ def write_generated_dataset(
                         "width_source": trajectory.case.target.width_source,
                     },
                     "generator_diagnostics": dict(trajectory.diagnostics),
+                    "generator_endpoint_hit": dict(trajectory.endpoint_hit),
                 }
             )
 

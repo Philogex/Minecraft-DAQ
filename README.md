@@ -247,8 +247,9 @@ order is preserved by the concatenated timeline. The older positional syntax
 remains available as a shorthand for one session per independently plotted
 dataset; it must not be mixed with `--dataset` in the same command.
 
-The face-hit plot has no method comparison axis. Supplying multiple positional
-sessions pools all their hit points into its one distribution.
+The face-hit plot uses the same dataset grouping syntax. Positional sessions
+remain a shorthand for separate rows; use one `--dataset` to pool multiple
+sessions into a single weighted distribution.
 
 ### Paired Generator Datasets
 
@@ -495,20 +496,36 @@ weighted point mass; omitted tails remain represented in the JSON report.
 
 ### Face Hit Distribution
 
-`tools/plot_face_hit_distribution.py` shows where the final raycast intersects
-each of the six target-block faces:
+`tools/plot_face_hit_distribution.py` shows where human or generated final
+raycasts intersect each of the six target-block faces. Generated hits are
+reconstructed from the path's final orientation and stored separately from the
+human hit that conditioned the generator:
 
 ```bash
-python tools/plot_face_hit_distribution.py /path/to/mining-session \
-  --output build/analysis/face-hit-distribution.png
+python tools/plot_face_hit_distribution.py \
+  --dataset Human /path/to/mining-session \
+  --dataset GeometryFeedback /path/to/generated-session \
+  --paired-only \
+  --output build/analysis/human-vs-generated-face-hits.png
 ```
 
 Hit coordinates are translated into block-local `[0, 1]` coordinates while
 retaining the corresponding world axes: north/south use `(x, y)`, east/west
 use `(z, y)`, and up/down use `(x, z)`. Opposite faces are deliberately not
-mirrored. Density is normalized independently per face so that spatial bias on
-rare faces remains visible; titles separately report each face's absolute count
-and share of all valid hits. The cyan cross marks the median hit coordinate.
+mirrored. Density is normalized independently per dataset and face so that
+spatial bias on rare faces remains visible; titles separately report raw count,
+weighted count, and share of all valid hits. Generated replicates retain their
+`1 / replicate_count` analysis weights. The cyan cross marks the weighted
+median hit coordinate.
+
+Generated endpoint reconstruction currently supports targets represented by a
+full-block AABB. Unsupported target shapes and rays that miss the target are
+counted explicitly in the JSON report rather than approximated. This is exact
+for the current Diamond Ore DAQ cohorts.
+
+`--paired-only` restricts every row to source session/event pairs available in
+all generated cohorts. This prevents human events rejected during generator
+preprocessing from changing the compared face or target-condition mixture.
 
 ### Concatenated Movement Timeline
 

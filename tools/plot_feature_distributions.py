@@ -366,11 +366,8 @@ def main() -> None:
                 eye_height=args.eye_height,
                 segmentation_config=segmentation_config,
             )
-            aligned = align_paths(records)
-            alignment_failures = len(records) - len(aligned)
             session_skipped = dict(skipped)
-            if alignment_failures:
-                session_skipped["alignment_failed"] = alignment_failures
+            aligned = align_paths(records, skipped_reasons=session_skipped)
             for reason, count in session_skipped.items():
                 group_skipped[reason] = group_skipped.get(reason, 0) + count
             feature_rows.extend(

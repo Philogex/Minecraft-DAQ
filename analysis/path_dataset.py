@@ -46,6 +46,7 @@ class GenerationCase:
     angular_step_deg: float
     start_source: str
     eye_position: tuple[float, float, float]
+    start_inside_target_region: bool
 
 
 @dataclass(frozen=True)
@@ -231,6 +232,9 @@ def write_generated_dataset(
                         ),
                         "distance": trajectory.case.target.distance,
                         "width_source": trajectory.case.target.width_source,
+                        "start_inside_target_region": (
+                            trajectory.case.start_inside_target_region
+                        ),
                     },
                     "generator_diagnostics": dict(trajectory.diagnostics),
                     "generator_endpoint_hit": dict(trajectory.endpoint_hit),

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Iterable, MutableMapping, Sequence
 
 from analysis.aim_features import AimPoint, shortest_yaw_delta, unwrap_yaws
 
@@ -24,6 +24,7 @@ class PathDensityRecord:
     target: AngularTarget
     effective_width: float | None = None
     weight: float = 1.0
+    start_inside_target_region: bool = False
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,61 @@ class AlignedPath:
     width_pitch: float
     fitts_id: float
     weight: float
+
+
+START_INSIDE_TARGET_REGION = "start_inside_target_region"
+
+
+def direction_from_orientation(yaw: float, pitch: float) -> tuple[float, float, float]:
+    """Convert Minecraft yaw and pitch to a unit look direction."""
+
+    yaw_radians = math.radians(yaw)
+    pitch_radians = math.radians(pitch)
+    pitch_cosine = math.cos(pitch_radians)
+    return (
+        -math.sin(yaw_radians) * pitch_cosine,
+        -math.sin(pitch_radians),
+        math.cos(yaw_radians) * pitch_cosine,
+    )
+
+
+def point_in_visible_direction_components(
+    direction: tuple[float, float, float],
+    components: Sequence[Sequence[tuple[float, float, float]]],
+) -> bool:
+    """Test a direction against convex spherical components."""
+
+    def dot(first, second) -> float:
+        return sum(lhs * rhs for lhs, rhs in zip(first, second))
+
+    def cross(first, second) -> tuple[float, float, float]:
+        return (
+            first[1] * second[2] - first[2] * second[1],
+            first[2] * second[0] - first[0] * second[2],
+            first[0] * second[1] - first[1] * second[0],
+        )
+
+    for vertices in components:
+        if len(vertices) < 3:
+            continue
+        interior = tuple(
+            sum(vertex[axis] for vertex in vertices) for axis in range(3)
+        )
+        edges = tuple(
+            cross(vertex, vertices[(index + 1) % len(vertices)])
+            for index, vertex in enumerate(vertices)
+        )
+        orientation_sum = sum(dot(edge, interior) for edge in edges)
+        if orientation_sum == 0.0:
+            continue
+        orientation = 1.0 if orientation_sum > 0.0 else -1.0
+        if all(
+            orientation * dot(edge, direction)
+            >= -1.0e-12 * max(1.0, math.sqrt(dot(edge, edge)))
+            for edge in edges
+        ):
+            return True
+    return False
 
 
 def effective_target_width(
@@ -62,7 +118,12 @@ def effective_target_width(
 def align_path(record: PathDensityRecord) -> AlignedPath | None:
     """Align start-to-target with +x and normalize angular distance to one."""
 
-    if len(record.points) < 2 or not math.isfinite(record.weight) or record.weight <= 0.0:
+    if (
+        record.start_inside_target_region
+        or len(record.points) < 2
+        or not math.isfinite(record.weight)
+        or record.weight <= 0.0
+    ):
         return None
     start = record.points[0]
     movement_yaw = shortest_yaw_delta(start.yaw, record.target.yaw)
@@ -114,8 +175,28 @@ def align_path(record: PathDensityRecord) -> AlignedPath | None:
     )
 
 
-def align_paths(records: Iterable[PathDensityRecord]) -> tuple[AlignedPath, ...]:
-    return tuple(path for record in records if (path := align_path(record)) is not None)
+def align_paths(
+    records: Iterable[PathDensityRecord],
+    *,
+    skipped_reasons: MutableMapping[str, int] | None = None,
+) -> tuple[AlignedPath, ...]:
+    paths: list[AlignedPath] = []
+    for record in records:
+        if record.start_inside_target_region:
+            if skipped_reasons is not None:
+                skipped_reasons[START_INSIDE_TARGET_REGION] = (
+                    skipped_reasons.get(START_INSIDE_TARGET_REGION, 0) + 1
+                )
+            continue
+        path = align_path(record)
+        if path is None:
+            if skipped_reasons is not None:
+                skipped_reasons["alignment_failed"] = (
+                    skipped_reasons.get("alignment_failed", 0) + 1
+                )
+            continue
+        paths.append(path)
+    return tuple(paths)
 
 
 def weighted_quantile(

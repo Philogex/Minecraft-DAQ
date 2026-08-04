@@ -171,14 +171,18 @@ def _plot(datasets, output: Path, *, histogram_bins: int, plot_quantile: float,
         )
         weights = [weight for _, weight in dataset]
         total_weight = sum(weights)
-        mean_x = np.average(
-            np.asarray([path.x for path, _ in dataset]), axis=0, weights=weights
-        )
-        mean_y = np.average(
-            np.asarray([path.y for path, _ in dataset]), axis=0, weights=weights
-        )
-        path_axis.plot(mean_x, mean_y, color="cyan", linewidth=1.8,
-                       label="weighted mean path")
+        path_x = np.asarray([path.x for path, _ in dataset])
+        path_y = np.asarray([path.y for path, _ in dataset])
+        median_x = [
+            weighted_quantile(path_x[:, index].tolist(), weights, 0.5)
+            for index in range(path_x.shape[1])
+        ]
+        median_y = [
+            weighted_quantile(path_y[:, index].tolist(), weights, 0.5)
+            for index in range(path_y.shape[1])
+        ]
+        path_axis.plot(median_x, median_y, color="cyan", linewidth=1.8,
+                       label="weighted median path")
         path_axis.scatter([0.0, 1.0], [0.0, 0.0], c=["white", "lime"], s=22)
         path_axis.set_xlim(x_min, x_max)
         path_axis.set_ylim(-y_abs, y_abs)
@@ -262,13 +266,10 @@ def main() -> None:
                 eye_height=args.eye_height,
                 segmentation_config=segmentation_config,
             )
-            aligned = align_paths(records)
-            normalized = _normalized_dataset(aligned)
             session_skipped = dict(skipped)
-            alignment_failures = len(records) - len(aligned)
+            aligned = align_paths(records, skipped_reasons=session_skipped)
+            normalized = _normalized_dataset(aligned)
             normalization_failures = len(aligned) - len(normalized)
-            if alignment_failures:
-                session_skipped["alignment_failed"] = alignment_failures
             if normalization_failures:
                 session_skipped["normalization_failed"] = normalization_failures
             for reason, count in session_skipped.items():

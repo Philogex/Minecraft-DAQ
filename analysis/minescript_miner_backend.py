@@ -15,6 +15,10 @@ from analysis.path_dataset import (
     PathPoint,
     TargetCondition,
 )
+from analysis.path_density import (
+    direction_from_orientation,
+    point_in_visible_direction_components,
+)
 
 
 class GenerationCaseError(ValueError):
@@ -303,6 +307,10 @@ class MinescriptMinerBackend:
             angular_step_deg=angular_step,
             start_source=start_source,
             eye_position=eye,
+            start_inside_target_region=point_in_visible_direction_components(
+                direction_from_orientation(start.yaw, start.pitch),
+                target_metrics.visible_components,
+            ),
         )
 
     def generate(

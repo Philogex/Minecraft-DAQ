@@ -30,6 +30,8 @@ from analysis.path_density import (
     AngularTarget,
     PathDensityRecord,
     align_paths,
+    direction_from_orientation,
+    point_in_visible_direction_components,
     paths_in_bin,
     quantile_edges,
     weighted_quantile,
@@ -116,6 +118,9 @@ def _record_from_generated(
         weight = float(metadata.get("analysis_weight", 1.0))
     except (KeyError, TypeError, ValueError):
         return None
+    start_inside_target_region = target.get("start_inside_target_region", False)
+    if not isinstance(start_inside_target_region, bool):
+        return None
     return PathDensityRecord(
         event_id=recorded.event.event_id,
         points=tuple(
@@ -125,6 +130,7 @@ def _record_from_generated(
         target=angular_target,
         effective_width=effective_width,
         weight=weight,
+        start_inside_target_region=start_inside_target_region,
     )
 
 
@@ -172,6 +178,13 @@ def _records_for_session(
                     width_pitch=case.target.width_pitch,
                 ),
                 effective_width=case.effective_width,
+                start_inside_target_region=point_in_visible_direction_components(
+                    direction_from_orientation(
+                        case.start_sample.yaw,
+                        case.start_sample.pitch,
+                    ),
+                    case.visible_components,
+                ),
             )
         if segmentation_config is not None and not is_generated:
             result = segment_target_movement(
@@ -218,6 +231,13 @@ def _records_for_session(
                 ),
                 effective_width=refined_case.effective_width,
                 weight=record.weight,
+                start_inside_target_region=point_in_visible_direction_components(
+                    direction_from_orientation(
+                        refined_case.start_sample.yaw,
+                        refined_case.start_sample.pitch,
+                    ),
+                    refined_case.visible_components,
+                ),
             )
         records.append(record)
     return tuple(records), skipped
@@ -385,20 +405,34 @@ def _plot(
                     norm=PowerNorm(gamma=0.4, vmin=0.0, vmax=vmax),
                     interpolation="nearest",
                 )
-                mean_x = np.zeros_like(progress_grid)
-                mean_y = np.zeros_like(progress_grid)
-                total_weight = 0.0
-                for path in paths:
-                    mean_x += path.weight * np.interp(progress_grid, path.progress, path.x)
-                    mean_y += path.weight * np.interp(progress_grid, path.progress, path.y)
-                    total_weight += path.weight
-                if total_weight > 0.0:
+                path_weights = [path.weight for path in paths]
+                if sum(path_weights) > 0.0:
+                    interpolated_x = np.asarray([
+                        np.interp(progress_grid, path.progress, path.x)
+                        for path in paths
+                    ])
+                    interpolated_y = np.asarray([
+                        np.interp(progress_grid, path.progress, path.y)
+                        for path in paths
+                    ])
+                    median_x = [
+                        weighted_quantile(
+                            interpolated_x[:, index].tolist(), path_weights, 0.5
+                        )
+                        for index in range(len(progress_grid))
+                    ]
+                    median_y = [
+                        weighted_quantile(
+                            interpolated_y[:, index].tolist(), path_weights, 0.5
+                        )
+                        for index in range(len(progress_grid))
+                    ]
                     axis.plot(
-                        mean_x / total_weight,
-                        mean_y / total_weight,
+                        median_x,
+                        median_y,
                         color="cyan",
                         linewidth=1.8,
-                        label="weighted mean path",
+                        label="weighted median path",
                     )
             visible_weight = sum(
                 path.weight
@@ -504,11 +538,8 @@ def main() -> None:
                 eye_height=args.eye_height,
                 segmentation_config=segmentation_config,
             )
-            aligned = align_paths(records)
-            alignment_failures = len(records) - len(aligned)
             session_skipped = dict(skipped)
-            if alignment_failures:
-                session_skipped["alignment_failed"] = alignment_failures
+            aligned = align_paths(records, skipped_reasons=session_skipped)
             for reason, count in session_skipped.items():
                 group_skipped[reason] = group_skipped.get(reason, 0) + count
             group_aligned.extend(aligned)

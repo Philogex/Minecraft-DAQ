@@ -16,10 +16,10 @@ import java.util.Objects;
 import java.util.UUID;
 
 public final class DaqRecorder {
-    private static final int SCHEMA_VERSION = 1;
+    private static final int SCHEMA_VERSION = 2;
     private static final int STATE_RING_BUFFER_CAPACITY = 8192;
     private static final int MOUSE_RING_BUFFER_CAPACITY = 8192;
-    private static final long EVENT_WINDOW_NS = 1_500_000_000L;
+    private static final long EVENT_WINDOW_NS = 3_000_000_000L;
     private static final DateTimeFormatter FILE_TIME_FORMAT =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
     private static final String EVENTS_CSV_HEADER = String.join(
@@ -37,7 +37,11 @@ public final class DaqRecorder {
         "hit_z",
         "block_state_before",
         "block_state_after",
-        "neighbors_json"
+        "neighbors_json",
+        "start_time_ns",
+        "destroy_progress_per_tick",
+        "expected_break_ticks",
+        "world_snapshot_json"
     );
     private static final String STATE_SAMPLES_CSV_HEADER = String.join(
         ",",
@@ -240,6 +244,16 @@ public final class DaqRecorder {
         appendCsv(row, event.blockStateBefore());
         appendCsv(row, event.blockStateAfter());
         appendCsv(row, event.neighborsJson());
+        MiningStartData start = event.start();
+        appendCsv(row, start == null ? "" : Long.toString(start.startTimeNs()));
+        appendCsv(row, start == null ? "" : Float.toString(start.destroyProgressPerTick()));
+        appendCsv(
+            row,
+            start == null || start.expectedBreakTicks() == null
+                ? ""
+                : Integer.toString(start.expectedBreakTicks())
+        );
+        appendCsv(row, start == null ? "" : start.worldSnapshotJson());
         session.eventsWriter().write(row.toString());
         session.eventsWriter().newLine();
     }

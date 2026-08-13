@@ -82,11 +82,11 @@ mouse delta counts.
 The mining dataset is event-based. A mining event is created when the block
 state of the currently relevant target block changes, for example from a block
 to air. The logger then exports the previous time window from the ring buffer,
-for example the last `1500 ms`.
+currently the last `3000 ms`.
 
-The event does not need an explicit start timestamp. Start timing, reaction
-time, and movement time should be reconstructed during analysis from the
-exported sample window.
+The most recent matching block-break start is attached to a completed event.
+Earlier or aborted starts are not exported; their motion remains observable in
+the sample window.
 
 ### CSV Shape
 
@@ -108,7 +108,11 @@ hit_y,
 hit_z,
 block_state_before,
 block_state_after,
-neighbors_json
+neighbors_json,
+start_time_ns,
+destroy_progress_per_tick,
+expected_break_ticks,
+world_snapshot_json
 ```
 
 `state_samples.csv` contains tick-based player and context samples for each
@@ -162,8 +166,18 @@ mouse_dy
 - `hit_x`, `hit_y`, and `hit_z` are the exact raycast hit position, if
   available.
 - `neighbors_json` stores the 26 neighboring block states around the target
-  block at event time. This is intentionally serialized inside one CSV field so
-  the dataset can evolve without adding many fixed columns.
+  block at the matching block-break start. This is intentionally serialized
+  inside one CSV field so the dataset can evolve without adding many fixed
+  columns.
+- `start_time_ns` is the timestamp of the last matching block-break start before
+  the completed event. It is empty when no matching start was observed.
+- `destroy_progress_per_tick` is Minecraft's block-destruction progress for the
+  player and block state at `start_time_ns`.
+- `expected_break_ticks` is `ceil(1 / destroy_progress_per_tick)` and is empty
+  when the progress is zero or no matching start was observed.
+- `world_snapshot_json` stores the cubic pre-break world region used to
+  reconstruct target visibility. It is empty when no matching start exists or
+  the required cube exceeds the miner's maximum `side` of 39.
 - `fov`, `gui_scale`, `fps_estimate`, and `sensitivity` are context values. They
   should be logged for normalization and filtering, but not directly mixed into
   the raw trajectory features.
@@ -181,6 +195,23 @@ mouse_dy
 
 The center block is omitted because it is already represented by
 `block_state_before` and `block_state_after`.
+
+### World Snapshot Object
+
+The snapshot is centered on the eye block and uses the smallest odd `side`
+that also contains the target block:
+
+```json
+{
+  "origin": [-3, 64, 8],
+  "side": 7,
+  "blocks": ["minecraft:air", "minecraft:stone"]
+}
+```
+
+`blocks` always contains exactly `side^3` block-state strings. Its order is the
+same as Minescript-Miner: X changes fastest, followed by Z and then Y. `origin`
+is the minimum X/Y/Z block position of the cube.
 
 ## Offline Analysis
 

@@ -9,7 +9,15 @@ from pathlib import Path
 from typing import Callable, Mapping, TypeVar
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2})
+
+
+@dataclass(frozen=True)
+class WorldSnapshot:
+    origin: tuple[int, int, int]
+    side: int
+    blocks: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -27,6 +35,10 @@ class MiningEvent:
     block_state_before: str
     block_state_after: str
     neighbors: tuple[dict[str, object], ...]
+    start_time_ns: int | None
+    destroy_progress_per_tick: float | None
+    expected_break_ticks: int | None
+    world_snapshot: WorldSnapshot | None
 
 
 @dataclass(frozen=True)
@@ -86,16 +98,17 @@ def _read_metadata(path: Path) -> Mapping[str, object]:
     return metadata
 
 
-def _schema_version(row: dict[str, str], path: Path) -> None:
+def _schema_version(row: dict[str, str], path: Path) -> int:
     try:
         version = int(row["schema_version"])
     except (KeyError, ValueError) as error:
         raise ValueError(f"invalid schema_version in {path}") from error
-    if version != SCHEMA_VERSION:
+    if version not in SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(
             f"unsupported DAQ schema version {version} in {path}; "
-            f"expected {SCHEMA_VERSION}"
+            f"expected one of {sorted(SUPPORTED_SCHEMA_VERSIONS)}"
         )
+    return version
 
 
 def _optional_float(row: dict[str, str], name: str) -> float | None:
@@ -103,8 +116,42 @@ def _optional_float(row: dict[str, str], name: str) -> float | None:
     return float(value) if value else None
 
 
+def _optional_int(row: dict[str, str], name: str) -> int | None:
+    value = row.get(name, "")
+    return int(value) if value else None
+
+
+def _world_snapshot(row: dict[str, str]) -> WorldSnapshot | None:
+    value = row.get("world_snapshot_json", "")
+    if not value:
+        return None
+    payload = json.loads(value)
+    if not isinstance(payload, dict):
+        raise ValueError("world_snapshot_json is not an object")
+    origin = payload.get("origin")
+    side = payload.get("side")
+    blocks = payload.get("blocks")
+    if (
+        not isinstance(origin, list)
+        or len(origin) != 3
+        or not all(isinstance(coordinate, int) for coordinate in origin)
+        or not isinstance(side, int)
+        or side <= 0
+        or side > 39
+        or not isinstance(blocks, list)
+        or len(blocks) != side**3
+        or not all(isinstance(block, str) for block in blocks)
+    ):
+        raise ValueError("world_snapshot_json has an invalid cube")
+    return WorldSnapshot(
+        origin=(origin[0], origin[1], origin[2]),
+        side=side,
+        blocks=tuple(blocks),
+    )
+
+
 def _parse_event(row: dict[str, str], path: Path) -> MiningEvent:
-    _schema_version(row, path)
+    version = _schema_version(row, path)
     try:
         neighbors = json.loads(row["neighbors_json"])
         if not isinstance(neighbors, list):
@@ -123,6 +170,12 @@ def _parse_event(row: dict[str, str], path: Path) -> MiningEvent:
             block_state_before=row["block_state_before"],
             block_state_after=row["block_state_after"],
             neighbors=tuple(neighbors),
+            start_time_ns=_optional_int(row, "start_time_ns"),
+            destroy_progress_per_tick=_optional_float(
+                row, "destroy_progress_per_tick"
+            ),
+            expected_break_ticks=_optional_int(row, "expected_break_ticks"),
+            world_snapshot=_world_snapshot(row) if version >= 2 else None,
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise ValueError(f"invalid event row in {path}") from error

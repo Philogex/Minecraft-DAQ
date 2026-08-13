@@ -11,6 +11,7 @@ public record MiningEventData(
     double hitZ,
     String blockStateBefore,
     String blockStateAfter,
-    String neighborsJson
+    String neighborsJson,
+    MiningStartData start
 ) {
 }

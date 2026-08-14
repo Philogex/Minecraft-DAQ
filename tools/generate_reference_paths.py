@@ -17,6 +17,7 @@ if project_root not in sys.path:
 
 from analysis.aim_features import AimPoint
 from analysis.minescript_miner_backend import GenerationCaseError, MinescriptMinerBackend
+from analysis.mining_context import state_sample_at_break_start
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import (
     MovementSegmentationConfig,
@@ -69,11 +70,18 @@ def main() -> None:
     )
     source_events = session.events[: args.max_events or None]
     for recorded in source_events:
+        geometry_sample = state_sample_at_break_start(recorded)
         try:
             case = backend.prepare_case(
                 session.session_id,
                 recorded,
                 eye_height=args.eye_height,
+                start_sample=geometry_sample,
+                start_source=(
+                    "recorded_break_start"
+                    if geometry_sample is not None
+                    else "window_first_sample"
+                ),
             )
         except GenerationCaseError as error:
             skipped[error.reason] += 1

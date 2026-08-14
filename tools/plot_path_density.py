@@ -27,6 +27,7 @@ from analysis.mining_context import (
     break_timing,
     break_timing_rejection_reason,
     parse_break_tick_edges,
+    state_sample_at_break_start,
 )
 from analysis.mining_session import MiningSession, RecordedMiningEvent, load_mining_session
 from analysis.movement_segmentation import (
@@ -259,11 +260,18 @@ def _records_for_session(
                 skipped[reason] = skipped.get(reason, 0) + 1
                 continue
         else:
+            geometry_sample = state_sample_at_break_start(recorded)
             try:
                 case = backend.prepare_case(
                     session.session_id,
                     recorded,
                     eye_height=eye_height,
+                    start_sample=geometry_sample,
+                    start_source=(
+                        "recorded_break_start"
+                        if geometry_sample is not None
+                        else "window_first_sample"
+                    ),
                 )
             except GenerationCaseError as error:
                 skipped[error.reason] = skipped.get(error.reason, 0) + 1

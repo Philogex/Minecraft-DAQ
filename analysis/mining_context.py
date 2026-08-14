@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from analysis.mining_session import MiningEvent
+from analysis.mining_session import MiningEvent, RecordedMiningEvent, StateSample
 
 
 MINECRAFT_TICK_MS = 50.0
@@ -65,6 +65,26 @@ def break_timing_rejection_reason(
     if not minimum_ratio <= timing.break_delay_ratio <= maximum_ratio:
         return "break_delay_ratio_outlier"
     return None
+
+
+def state_sample_at_break_start(
+    recorded: RecordedMiningEvent,
+) -> StateSample | None:
+    """Return the last tick sample at or before the recorded attack start."""
+
+    timing = break_timing(recorded.event)
+    if timing is None:
+        return None
+    start_relative_ms = -timing.actual_break_ms
+    return max(
+        (
+            sample
+            for sample in recorded.state_samples
+            if sample.relative_ms <= start_relative_ms
+        ),
+        key=lambda sample: sample.relative_ms,
+        default=None,
+    )
 
 
 def parse_break_tick_edges(text: str) -> tuple[int, ...]:

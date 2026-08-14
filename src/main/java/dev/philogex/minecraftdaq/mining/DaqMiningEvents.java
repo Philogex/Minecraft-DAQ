@@ -247,7 +247,8 @@ public final class DaqMiningEvents {
             if (session == null ||
                 !(player instanceof LocalPlayer localPlayer) ||
                 !(level instanceof ClientLevel clientLevel)) {
-                latest = null;
+                // The same Fabric event also fires on the integrated server.
+                // Ignore that invocation without discarding the client start.
                 return InteractionResult.PASS;
             }
 

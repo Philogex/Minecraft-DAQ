@@ -12,7 +12,7 @@ from typing import Mapping, Sequence
 from analysis.mining_session import MiningEvent, StateSample
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 METADATA_SCHEMA_VERSION = 1
 
 
@@ -124,6 +124,8 @@ def write_generated_dataset(
         "schema_version", "session_id", "event_id", "event_time_ns",
         "target_x", "target_y", "target_z", "face_id", "hit_x", "hit_y",
         "hit_z", "block_state_before", "block_state_after", "neighbors_json",
+        "start_time_ns", "destroy_progress_per_tick", "expected_break_ticks",
+        "world_snapshot_json",
     )
     state_fields = (
         "schema_version", "session_id", "event_id", "sample_time_ns",
@@ -152,6 +154,7 @@ def write_generated_dataset(
         for generated_event_id, trajectory in enumerate(trajectories, start=1):
             source = trajectory.case.source_event
             hit_point = (source.hit_x, source.hit_y, source.hit_z)
+            snapshot = source.world_snapshot
             event_writer.writerow(
                 {
                     "schema_version": SCHEMA_VERSION,
@@ -168,6 +171,25 @@ def write_generated_dataset(
                     "block_state_before": source.block_state_before,
                     "block_state_after": source.block_state_after,
                     "neighbors_json": json.dumps(source.neighbors, separators=(",", ":")),
+                    "start_time_ns": source.start_time_ns or "",
+                    "destroy_progress_per_tick": (
+                        source.destroy_progress_per_tick
+                        if source.destroy_progress_per_tick is not None
+                        else ""
+                    ),
+                    "expected_break_ticks": source.expected_break_ticks or "",
+                    "world_snapshot_json": (
+                        json.dumps(
+                            {
+                                "origin": snapshot.origin,
+                                "side": snapshot.side,
+                                "blocks": snapshot.blocks,
+                            },
+                            separators=(",", ":"),
+                        )
+                        if snapshot is not None
+                        else ""
+                    ),
                 }
             )
 
@@ -235,6 +257,7 @@ def write_generated_dataset(
                         "start_inside_target_region": (
                             trajectory.case.start_inside_target_region
                         ),
+                        "visible_components": trajectory.case.visible_components,
                     },
                     "generator_diagnostics": dict(trajectory.diagnostics),
                     "generator_endpoint_hit": dict(trajectory.endpoint_hit),

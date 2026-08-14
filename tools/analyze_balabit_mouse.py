@@ -93,6 +93,7 @@ class SegmentFeatures:
     geo_max_deviation: float
     geo_angular_dev_at_peak: float
     geo_curvature_integral: float
+    geo_boundary_clearance_ratio: float
 
 
 def parse_args() -> argparse.Namespace:

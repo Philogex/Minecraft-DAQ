@@ -312,7 +312,7 @@ Geometry-feedback cohorts additionally record exact controller diagnostics per
 event. These include feedback checks and correction impulses, first entry into
 the visible and margin-inset target regions, subsequent exits/re-entries, final
 membership, the chosen motor anchor, and the actually applicable safe margin.
-They are deliberately kept separate from the 17 method-neutral trajectory
+They are deliberately kept separate from the method-neutral trajectory
 features. Plot one or more diagnostic cohorts with:
 
 ```bash
@@ -327,7 +327,7 @@ analysis-specific generator call performs the additional region membership
 checks for every emitted sample.
 
 By default, the generator detects the final stationary-player movement episode
-inside the 1.5 s window and uses its onset as the generated path's initial
+inside the recording window and uses its onset as the generated path's initial
 condition. The metadata records `detected_movement_onset`, all segmentation
 parameters, and skipped-event counts. `--no-segmentation` retains the earlier
 `window_first_sample` behavior for diagnostics.
@@ -345,6 +345,27 @@ PYTHONPATH=../Minescript-Miner/src python tools/plot_path_density.py \
   --label SigmaDrift \
   --output build/analysis/human-vs-sigmadrift-path-density.png
 ```
+
+Both path- and speed-density tools can instead stratify by Minecraft's expected
+block-break duration:
+
+```bash
+PYTHONPATH=../Minescript-Miner/src python tools/plot_path_density.py \
+  --dataset Human /path/to/schema-v2-session \
+  --stratify-by expected-break-duration \
+  --break-tick-edges 1,3,6,11,21 \
+  --output build/analysis/path-density-by-break-duration.png
+```
+
+The categories use `expected_break_ms = expected_break_ticks * 50`, not
+observed duration; `--break-tick-edges` merely expresses the exact millisecond
+boundaries in Minecraft ticks. By default, schema-v2 events are rejected when
+their observed tick estimate
+`actual_break_ms / 50 + 1` differs from expectation by a ratio outside
+`0.5..2.0`. The limits are configurable with `--min-break-delay-ratio` and
+`--max-break-delay-ratio`; schema-v1 events have no break context and are not
+rejected by this filter. Events without break context remain available for
+effective-width plots but do not enter break-duration strata.
 
 For a start-to-target movement vector `(dyaw, dpitch)`, the effective angular
 target width is the projection of the reconstructed angular target rectangle
@@ -422,7 +443,8 @@ PYTHONPATH=../Minescript-Miner/src python tools/plot_feature_distributions.py \
 
 The comparison implements the paper's complete clean set of 17 features: four
 Fitts features, five submovement features, four smoothness features, and four
-geometry features. The smoothness family (`smooth_jerk_rms`,
+geometry features. It additionally reports the Minecraft-specific
+`geo_boundary_clearance_ratio`. The smoothness family (`smooth_jerk_rms`,
 `smooth_norm_jerk`, `smooth_ldlj`, and
 `smooth_curvature_change_rate`) follows the public
 `ck0i/sigmadrift-detector` formulas. Human smoothness and fine geometry use the
@@ -454,6 +476,12 @@ The plotted feature names have the following meanings:
 - `geo_max_deviation`: maximum perpendicular distance from the direct path.
 - `geo_angular_dev_at_peak`: heading error at maximum movement speed, in degrees.
 - `geo_curvature_integral`: accumulated absolute heading change along the path.
+- `geo_boundary_clearance_ratio`: endpoint clearance from the reconstructed
+  visible-region boundary divided by the largest component inradius. Zero is a
+  boundary hit and one is maximally central. It is absent for schema-v1 and
+  external datasets without complete target geometry. Overlapping convex
+  components are evaluated independently, making this a conservative union
+  approximation without a polygon-union step.
 
 All datasets use identical bin edges per feature. Histograms show weighted
 counts rather than raw sample counts, and dashed lines plus legend values show

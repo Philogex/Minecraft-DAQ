@@ -28,7 +28,11 @@ from analysis.minescript_miner_backend import MinescriptMinerBackend
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import MovementSegmentationConfig
 from analysis.path_density import AlignedPath, align_paths, weighted_quantile
-from tools.plot_path_density import MOUSE_PATH_RECONSTRUCTION, _records_for_session
+from tools.plot_path_density import (
+    MOUSE_PATH_RECONSTRUCTION,
+    _records_for_session,
+    add_break_timing_arguments,
+)
 
 
 UNIT_INDEPENDENT_REFERENCE_FEATURES = frozenset(
@@ -87,6 +91,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-idle-gap-ms", type=float, default=150.0)
     parser.add_argument("--minimum-motion-ratio", type=float, default=0.1)
     parser.add_argument("--max-player-displacement", type=float, default=0.05)
+    add_break_timing_arguments(parser)
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()
 
@@ -119,6 +124,7 @@ def _features_for_path(
         fitts_b_ms=fitts_b_ms,
         fallback_width_deg=path.effective_width,
         wrap_yaw=False,
+        boundary_clearance_ratio=path.boundary_clearance_ratio,
     )
     return {
         name: float(getattr(features, name))
@@ -236,11 +242,14 @@ def _plot(
             weights_by_dataset.append(finite_weights)
             missing_weights.append(missing_weight)
 
-        lower, upper = _feature_range(
-            values_by_dataset,
-            weights_by_dataset,
-            value_quantile,
-        )
+        if feature_name == "geo_boundary_clearance_ratio":
+            lower, upper = 0.0, 1.0
+        else:
+            lower, upper = _feature_range(
+                values_by_dataset,
+                weights_by_dataset,
+                value_quantile,
+            )
         edges = _histogram_edges(feature_name, lower, upper, histogram_bins)
         feature_report: dict[str, object] = {
             "feature": feature_name,
@@ -248,6 +257,7 @@ def _plot(
             "datasets": [],
         }
 
+        any_finite_values = any(values_by_dataset)
         for dataset_index, dataset in enumerate(datasets):
             values = values_by_dataset[dataset_index]
             weights = weights_by_dataset[dataset_index]
@@ -297,11 +307,24 @@ def _plot(
                 }
             )
 
+        if not any_finite_values:
+            axis.text(
+                0.5,
+                0.5,
+                "no finite values",
+                ha="center",
+                va="center",
+                transform=axis.transAxes,
+                color="0.35",
+            )
+
         axis.set_title(feature_name)
         axis.set_xlabel("feature value")
         axis.set_ylabel("weighted count")
         axis.grid(True, axis="y", alpha=0.2)
-        axis.legend(fontsize="small")
+        handles, labels = axis.get_legend_handles_labels()
+        if handles:
+            axis.legend(handles, labels, fontsize="small")
         reports.append(feature_report)
 
     for unused_index in range(len(COMPARISON_FEATURE_NAMES), rows * columns):
@@ -328,6 +351,11 @@ def main() -> None:
         raise SystemExit("--histogram-bins must be greater than one")
     if not 0.0 < args.value_quantile <= 1.0:
         raise SystemExit("--value-quantile must be in (0, 1]")
+    if not (
+        0.0 <= args.min_break_delay_ratio <= args.max_break_delay_ratio
+        and math.isfinite(args.max_break_delay_ratio)
+    ):
+        raise SystemExit("break delay ratio bounds must be finite and ordered")
 
     groups = resolve_dataset_groups(args.sessions, args.labels, args.dataset)
     backend = MinescriptMinerBackend("sigmadrift", args.config)
@@ -365,6 +393,9 @@ def main() -> None:
                 backend,
                 eye_height=args.eye_height,
                 segmentation_config=segmentation_config,
+                filter_break_delay=not args.no_break_delay_filter,
+                minimum_break_delay_ratio=args.min_break_delay_ratio,
+                maximum_break_delay_ratio=args.max_break_delay_ratio,
             )
             session_skipped = dict(skipped)
             aligned = align_paths(records, skipped_reasons=session_skipped)
@@ -467,6 +498,12 @@ def main() -> None:
         },
         "value_quantile": args.value_quantile,
         "human_trajectory_reconstruction": MOUSE_PATH_RECONSTRUCTION,
+        "break_timing_filter": {
+            "enabled": not args.no_break_delay_filter,
+            "minimum_ratio": args.min_break_delay_ratio,
+            "maximum_ratio": args.max_break_delay_ratio,
+            "observed_tick_estimate": "actual_break_ms / 50 + 1",
+        },
         "external_reference_comparable_features": sorted(
             UNIT_INDEPENDENT_REFERENCE_FEATURES
         ),

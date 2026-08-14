@@ -17,18 +17,23 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from analysis.minescript_miner_backend import MinescriptMinerBackend
+from analysis.mining_context import parse_break_tick_edges
 from analysis.dataset_groups import add_dataset_arguments, resolve_dataset_groups
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import MovementSegmentationConfig
 from analysis.path_density import (
     AlignedPath,
+    PathStratum,
     align_paths,
-    paths_in_bin,
+    effective_width_strata,
+    expected_break_duration_strata,
+    paths_in_stratum,
     quantile_edges,
     weighted_quantile,
 )
 from tools.plot_path_density import (
     MOUSE_PATH_RECONSTRUCTION,
+    add_break_timing_arguments,
     _parse_edges,
     _records_for_session,
 )
@@ -44,6 +49,11 @@ def parse_args() -> argparse.Namespace:
     add_dataset_arguments(parser)
     parser.add_argument("--output", type=Path, default=Path("speed-density.png"))
     parser.add_argument("--strata", type=int, default=3)
+    parser.add_argument(
+        "--stratify-by",
+        choices=("effective-width", "expected-break-duration"),
+        default="effective-width",
+    )
     parser.add_argument("--width-edges")
     parser.add_argument("--histogram-bins", type=int, default=100)
     parser.add_argument("--time-samples", type=int, default=101)
@@ -59,6 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-idle-gap-ms", type=float, default=150.0)
     parser.add_argument("--minimum-motion-ratio", type=float, default=0.1)
     parser.add_argument("--max-player-displacement", type=float, default=0.05)
+    add_break_timing_arguments(parser)
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()
 
@@ -103,7 +114,7 @@ def _resampled_speeds(
 
 def _plot(
     datasets: list[tuple[str, tuple[AlignedPath, ...]]],
-    edges: tuple[float, ...],
+    strata: tuple[PathStratum, ...],
     output: Path,
     *,
     histogram_bins: int,
@@ -119,7 +130,7 @@ def _plot(
     import numpy as np
     from matplotlib.colors import PowerNorm
 
-    row_count = len(edges) - 1
+    row_count = len(strata)
     column_count = len(datasets)
     figure, axes = plt.subplots(
         row_count,
@@ -129,17 +140,15 @@ def _plot(
         constrained_layout=True,
     )
     figure.suptitle(
-        "Angular-speed density by effective angular width\n"
+        "Angular-speed density by analysis stratum\n"
         "time normalized per movement; speed retained in deg/s"
     )
     time_grid = np.linspace(0.0, 1.0, time_samples)
     panel_reports: list[dict[str, object]] = []
 
-    for row in range(row_count):
-        lower = edges[row]
-        upper = edges[row + 1]
+    for row, stratum in enumerate(strata):
         binned = [
-            paths_in_bin(paths, lower, upper, include_upper=row == row_count - 1)
+            paths_in_stratum(paths, stratum)
             for _, paths in datasets
         ]
         profiles_by_dataset = [
@@ -263,12 +272,13 @@ def _plot(
             panel_reports.append(
                 {
                     "label": label,
-                    "width_lower_deg": lower,
-                    "width_upper_deg": upper,
+                    "stratum": asdict(stratum),
                     "path_count": len(paths),
                     "path_weight": sum(path_weights),
                     "speed_viewport_max_deg_s": speed_max,
-                    "point_weight_in_viewport": in_viewport,
+                    "point_weight_in_viewport": (
+                        in_viewport if math.isfinite(in_viewport) else None
+                    ),
                     "median_speed_deg_s": [
                         None if not math.isfinite(float(value)) else float(value)
                         for value in median_speeds
@@ -276,7 +286,7 @@ def _plot(
                 }
             )
         axes[row][0].annotate(
-            f"W_eff [{lower:.3f}, {upper:.3f}{']' if row == row_count - 1 else ')'} deg",
+            stratum.label,
             xy=(-0.2, 0.5),
             xycoords="axes fraction",
             rotation=90,
@@ -301,6 +311,11 @@ def main() -> None:
         raise SystemExit("--strata, --histogram-bins, and --time-samples must be positive")
     if not 0.0 < args.speed_quantile <= 1.0:
         raise SystemExit("--speed-quantile must be in (0, 1]")
+    if not (
+        0.0 <= args.min_break_delay_ratio <= args.max_break_delay_ratio
+        and math.isfinite(args.max_break_delay_ratio)
+    ):
+        raise SystemExit("break delay ratio bounds must be finite and ordered")
 
     groups = resolve_dataset_groups(args.sessions, args.labels, args.dataset)
     backend = MinescriptMinerBackend("sigmadrift", args.config)
@@ -326,6 +341,9 @@ def main() -> None:
                 backend,
                 eye_height=args.eye_height,
                 segmentation_config=segmentation_config,
+                filter_break_delay=not args.no_break_delay_filter,
+                minimum_break_delay_ratio=args.min_break_delay_ratio,
+                maximum_break_delay_ratio=args.max_break_delay_ratio,
             )
             session_skipped = dict(skipped)
             aligned = align_paths(records, skipped_reasons=session_skipped)
@@ -373,15 +391,25 @@ def main() -> None:
                 )
             )
 
-    edges = (
-        _parse_edges(args.width_edges)
-        if args.width_edges
-        else quantile_edges(datasets[0][1], args.strata)
-    )
-    print("W_eff edges [deg]: " + ", ".join(f"{edge:.6f}" for edge in edges))
+    if args.stratify_by == "effective-width":
+        edges = (
+            _parse_edges(args.width_edges)
+            if args.width_edges
+            else quantile_edges(datasets[0][1], args.strata)
+        )
+        strata = effective_width_strata(edges)
+        print("W_eff edges [deg]: " + ", ".join(f"{edge:.6f}" for edge in edges))
+    else:
+        try:
+            tick_edges = parse_break_tick_edges(args.break_tick_edges)
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
+        strata = expected_break_duration_strata(tick_edges)
+        edges = ()
+        print("Expected break tick edges: " + ", ".join(map(str, tick_edges)) + ", inf")
     panels = _plot(
         datasets,
-        edges,
+        strata,
         args.output,
         histogram_bins=args.histogram_bins,
         time_samples=args.time_samples,
@@ -395,7 +423,9 @@ def main() -> None:
         "plot": "angular_speed_density",
         "time_axis": "normalized_movement_time",
         "speed_unit": "deg/s",
-        "effective_width_edges_deg": edges,
+        "stratification": strata[0].key,
+        "strata": [asdict(stratum) for stratum in strata],
+        "effective_width_edges_deg": edges or None,
         "movement_segmentation": {
             "enabled": segmentation_config is not None,
             "config": asdict(segmentation_config) if segmentation_config else None,
@@ -404,6 +434,12 @@ def main() -> None:
         "speed_quantile": args.speed_quantile,
         "time_samples": args.time_samples,
         "human_trajectory_reconstruction": MOUSE_PATH_RECONSTRUCTION,
+        "break_timing_filter": {
+            "enabled": not args.no_break_delay_filter,
+            "minimum_ratio": args.min_break_delay_ratio,
+            "maximum_ratio": args.max_break_delay_ratio,
+            "observed_tick_estimate": "actual_break_ms / 50 + 1",
+        },
         "datasets": dataset_reports,
         "panels": panels,
     }

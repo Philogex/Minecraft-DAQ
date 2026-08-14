@@ -25,6 +25,7 @@ COMPARISON_FEATURE_NAMES = (
     "geo_max_deviation",
     "geo_angular_dev_at_peak",
     "geo_curvature_integral",
+    "geo_boundary_clearance_ratio",
 )
 
 @dataclass(frozen=True)
@@ -67,6 +68,7 @@ class AimPathFeatures:
     geo_max_deviation: float
     geo_angular_dev_at_peak: float
     geo_curvature_integral: float
+    geo_boundary_clearance_ratio: float
 
 
 @dataclass(frozen=True)
@@ -379,6 +381,7 @@ def compute_aim_path_features(
     fitts_b_ms: float,
     fallback_width_deg: float,
     wrap_yaw: bool = True,
+    boundary_clearance_ratio: float = math.nan,
 ) -> AimPathFeatures:
     if len(points) < 2:
         nan = math.nan
@@ -401,6 +404,7 @@ def compute_aim_path_features(
             geo_max_deviation=nan,
             geo_angular_dev_at_peak=nan,
             geo_curvature_integral=nan,
+            geo_boundary_clearance_ratio=nan,
         )
 
     series = aim_path_series(points, wrap_yaw=wrap_yaw)
@@ -490,4 +494,9 @@ def compute_aim_path_features(
             wrap_yaw=wrap_yaw,
         ),
         geo_curvature_integral=_curvature_integral(series),
+        geo_boundary_clearance_ratio=(
+            min(1.0, max(0.0, boundary_clearance_ratio))
+            if math.isfinite(boundary_clearance_ratio)
+            else math.nan
+        ),
     )

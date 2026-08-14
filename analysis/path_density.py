@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Iterable, MutableMapping, Sequence
 
 from analysis.aim_features import AimPoint, shortest_yaw_delta, unwrap_yaws
+from analysis.mining_context import MINECRAFT_TICK_MS
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,11 @@ class PathDensityRecord:
     effective_width: float | None = None
     weight: float = 1.0
     start_inside_target_region: bool = False
+    expected_break_ticks: int | None = None
+    expected_break_ms: float | None = None
+    actual_break_ms: float | None = None
+    break_delay_ratio: float | None = None
+    boundary_clearance_ratio: float = math.nan
 
 
 @dataclass(frozen=True)
@@ -40,6 +46,20 @@ class AlignedPath:
     width_pitch: float
     fitts_id: float
     weight: float
+    expected_break_ticks: int | None
+    expected_break_ms: float | None
+    actual_break_ms: float | None
+    break_delay_ratio: float | None
+    boundary_clearance_ratio: float
+
+
+@dataclass(frozen=True)
+class PathStratum:
+    key: str
+    label: str
+    lower: float
+    upper: float | None
+    include_upper: bool = False
 
 
 START_INSIDE_TARGET_REGION = "start_inside_target_region"
@@ -172,6 +192,11 @@ def align_path(record: PathDensityRecord) -> AlignedPath | None:
         width_pitch=record.target.width_pitch,
         fitts_id=fitts_id,
         weight=record.weight,
+        expected_break_ticks=record.expected_break_ticks,
+        expected_break_ms=record.expected_break_ms,
+        actual_break_ms=record.actual_break_ms,
+        break_delay_ratio=record.break_delay_ratio,
+        boundary_clearance_ratio=record.boundary_clearance_ratio,
     )
 
 
@@ -254,3 +279,73 @@ def paths_in_bin(
     if include_upper:
         return tuple(path for path in paths if lower <= path.effective_width <= upper)
     return tuple(path for path in paths if lower <= path.effective_width < upper)
+
+
+def effective_width_strata(edges: Sequence[float]) -> tuple[PathStratum, ...]:
+    return tuple(
+        PathStratum(
+            key="effective_angular_target_width",
+            label=(
+                f"W_eff [{lower:.3f}, {upper:.3f}"
+                f"{']' if index == len(edges) - 2 else ')'} deg"
+            ),
+            lower=lower,
+            upper=upper,
+            include_upper=index == len(edges) - 2,
+        )
+        for index, (lower, upper) in enumerate(zip(edges, edges[1:]))
+    )
+
+
+def expected_break_duration_strata(
+    tick_edges: Sequence[int],
+) -> tuple[PathStratum, ...]:
+    strata = []
+    for lower, upper in zip(tick_edges, tick_edges[1:]):
+        strata.append(
+            PathStratum(
+                key="expected_break_ms",
+                label=(
+                    f"expected {lower}-{upper - 1} ticks "
+                    f"({lower * MINECRAFT_TICK_MS:g}-"
+                    f"{(upper - 1) * MINECRAFT_TICK_MS:g} ms)"
+                ),
+                lower=lower * MINECRAFT_TICK_MS,
+                upper=upper * MINECRAFT_TICK_MS,
+            )
+        )
+    lower = tick_edges[-1]
+    strata.append(
+        PathStratum(
+            key="expected_break_ms",
+            label=(
+                f"expected >= {lower} ticks "
+                f"(>= {lower * MINECRAFT_TICK_MS:g} ms)"
+            ),
+            lower=lower * MINECRAFT_TICK_MS,
+            upper=None,
+        )
+    )
+    return tuple(strata)
+
+
+def paths_in_stratum(
+    paths: Sequence[AlignedPath],
+    stratum: PathStratum,
+) -> tuple[AlignedPath, ...]:
+    if stratum.key == "effective_angular_target_width":
+        return paths_in_bin(
+            paths,
+            stratum.lower,
+            stratum.upper if stratum.upper is not None else math.inf,
+            include_upper=stratum.include_upper,
+        )
+    if stratum.key != "expected_break_ms":
+        raise ValueError(f"unsupported path stratum: {stratum.key}")
+    return tuple(
+        path
+        for path in paths
+        if path.expected_break_ms is not None
+        and path.expected_break_ms >= stratum.lower
+        and (stratum.upper is None or path.expected_break_ms < stratum.upper)
+    )

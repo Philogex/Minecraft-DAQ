@@ -43,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-segmentation",
         action="store_true",
-        help="Use the first 1.5 s window sample instead of detected movement onset.",
+        help="Use the first complete recording-window sample instead of detected movement onset.",
     )
     parser.add_argument("--max-idle-gap-ms", type=float, default=150.0)
     parser.add_argument("--minimum-motion-ratio", type=float, default=0.1)

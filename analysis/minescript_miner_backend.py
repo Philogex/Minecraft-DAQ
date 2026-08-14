@@ -215,18 +215,33 @@ class MinescriptMinerBackend:
         target_orientation = self._target_orientation(eye, hit)
 
         center = tuple(math.floor(value) for value in eye)
-        half = max(
-            abs(target_block[index] - center[index]) for index in range(3)
-        ) + 1
-        side = half * 2 + 1
-        if side > self._max_cube_side:
-            raise GenerationCaseError(
-                "target_outside_solver_range",
-                f"reconstruction requires side={side}, maximum is {self._max_cube_side}",
+        snapshot = event.world_snapshot
+        use_snapshot = False
+        if snapshot is not None:
+            snapshot_half = snapshot.side // 2
+            expected_origin = tuple(
+                center[index] - snapshot_half for index in range(3)
             )
-        min_pos = tuple(center[index] - half for index in range(3))
-        block_count = side**3
-        block_states = ["minecraft:air"] * block_count
+            use_snapshot = snapshot.origin == expected_origin
+
+        if use_snapshot and snapshot is not None:
+            side = snapshot.side
+            min_pos = snapshot.origin
+            block_states = list(snapshot.blocks)
+            width_source = "daq_world_snapshot"
+        else:
+            half = max(
+                abs(target_block[index] - center[index]) for index in range(3)
+            ) + 1
+            side = half * 2 + 1
+            if side > self._max_cube_side:
+                raise GenerationCaseError(
+                    "target_outside_solver_range",
+                    f"reconstruction requires side={side}, maximum is {self._max_cube_side}",
+                )
+            min_pos = tuple(center[index] - half for index in range(3))
+            block_states = ["minecraft:air"] * (side**3)
+            width_source = "local_26_neighbor_reconstruction"
 
         def block_index(position: tuple[int, int, int]) -> int | None:
             offsets = tuple(position[index] - min_pos[index] for index in range(3))
@@ -255,7 +270,7 @@ class MinescriptMinerBackend:
                 target_block[2] + dz,
             )
             index = block_index(position)
-            if index is not None:
+            if index is not None and not use_snapshot:
                 block_states[index] = state
             neighbor_states.append((dx, dy, dz, state))
 
@@ -300,7 +315,7 @@ class MinescriptMinerBackend:
                 width_yaw=target_metrics.width_yaw,
                 width_pitch=target_metrics.width_pitch,
                 distance=target_metrics.distance,
-                width_source="local_26_neighbor_reconstruction",
+                width_source=width_source,
             ),
             effective_width=target_metrics.effective_width,
             visible_components=target_metrics.visible_components,

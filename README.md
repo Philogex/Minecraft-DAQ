@@ -427,6 +427,34 @@ shared y limit in each stratum defaults to the pooled 99th weighted speed
 percentile; the exact in-viewport fraction is shown and written to the adjacent
 JSON report.
 
+### Break-Hold Stability
+
+`tools/plot_break_hold_stability.py` isolates camera motion after the recorded
+block-break start and before block removal:
+
+```bash
+python tools/plot_break_hold_stability.py \
+  --dataset Human /path/to/schema-v2-session \
+  --break-tick-edges 1,3,6,11,21 \
+  --output build/analysis/human-break-hold-stability.png
+```
+
+Panels are stratified by `expected_break_ms`. The x axis retains actual elapsed
+break time in milliseconds. Raw mouse deltas are accumulated into signed yaw
+and pitch displacement from the orientation at `start_time_ns`; the plotted y
+axis is their current radial magnitude, `hypot(delta_yaw, delta_pitch)`, not
+accumulated angular path length. Each time column is normalized independently,
+and weighted median and p95 curves summarize the active events. The adjacent
+JSON report retains signed yaw/pitch RMS, maxima, final offsets, covariance,
+anisotropy, angular path length, and active event counts, so the directional
+dimension discarded by the radial plot is not lost from analysis.
+
+The normal break-delay-ratio filter applies. Player motion is rejected only
+when the last state sample at or before `start_time_ns` differs from the last
+state sample at or before `event_time_ns` by more than
+`--position-tolerance`; intermediate positions and motion outside the break
+window do not affect this cohort.
+
 ### Kinematic Feature Distributions
 
 `tools/plot_feature_distributions.py` replaces the earlier single-path feature

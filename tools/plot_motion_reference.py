@@ -16,7 +16,7 @@ project_root = str(PROJECT_ROOT)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from analysis.minescript_miner_backend import MinescriptMinerBackend
+from analysis.java_miner_backend import JavaMinerBackend
 from analysis.dataset_groups import add_dataset_arguments, resolve_dataset_groups
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import MovementSegmentationConfig
@@ -243,7 +243,7 @@ def main() -> None:
     if not 0.0 < args.speed_quantile <= 1.0:
         raise SystemExit("--speed-quantile must be in (0, 1]")
 
-    backend = MinescriptMinerBackend("sigmadrift", args.config)
+    backend = JavaMinerBackend("sigmadrift", args.config)
     segmentation_config = None
     if not args.no_segmentation:
         segmentation_config = MovementSegmentationConfig(

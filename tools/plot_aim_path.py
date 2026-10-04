@@ -12,32 +12,19 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Sequence
+from types import SimpleNamespace
+from typing import Sequence
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MINER_ROOT = Path(
-    os.environ.get("MINESCRIPT_MINER_ROOT", PROJECT_ROOT.parent / "Minescript-Miner")
-)
-MINER_SRC_DIR = MINER_ROOT / "src"
-for path in (PROJECT_ROOT, MINER_ROOT, MINER_SRC_DIR):
-    path_string = str(path)
-    if path_string not in sys.path:
-        sys.path.insert(0, path_string)
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from minescript_miner.aim import AimConfig, load_aim_config
-from minescript_miner.aim import _sigmadrift_payload
-from minescript_miner.adapter.native_bridge import (
-    AimPoint,
-    Orientation,
-    TargetMetrics,
-    generate_minimum_jerk_aim_path,
-    generate_sigmadrift_aim_path,
-)
+from analysis.java_miner_client import JavaMinerClient, MINER_ROOT, Orientation, TargetMetrics
+from analysis.aim_features import AimPoint
 from analysis.aim_features import (
     AimPathFeatures,
     COMPARISON_FEATURE_NAMES,
@@ -48,10 +35,6 @@ from analysis.aim_features import (
 
 
 DEFAULT_OUTPUT = PROJECT_ROOT / "build" / "aim-analysis" / "aim_path.png"
-PathGenerator = Callable[
-    [Orientation, TargetMetrics, AimConfig, float],
-    tuple[AimPoint, ...],
-]
 
 
 @dataclass(frozen=True)
@@ -131,43 +114,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def native_minimum_jerk(
-    start_orientation: Orientation,
-    target: TargetMetrics,
-    config: AimConfig,
-    angular_step_deg: float,
-) -> tuple[AimPoint, ...]:
-    minimum = config.minimum_jerk
-    return generate_minimum_jerk_aim_path(
-        start_orientation,
-        target,
-        angular_step_deg,
-        minimum.fitts_a_ms,
-        minimum.fitts_b_ms,
-        minimum.min_duration_ms,
-        minimum.max_duration_ms,
-        minimum.sample_hz,
-    )
-
-
-def native_sigmadrift(
-    start_orientation: Orientation,
-    target: TargetMetrics,
-    config: AimConfig,
-    angular_step_deg: float,
-) -> tuple[AimPoint, ...]:
-    return generate_sigmadrift_aim_path(
-        start_orientation,
-        target,
-        angular_step_deg,
-        _sigmadrift_payload(config.sigmadrift),
-    )
-
-
-GENERATORS: dict[str, PathGenerator] = {
-    "minimum_jerk": native_minimum_jerk,
-    "sigmadrift": native_sigmadrift,
-}
+GENERATORS = ("minimum_jerk", "sigmadrift")
 
 
 def angular_velocity_segments(
@@ -228,24 +175,12 @@ def generate_paths(
     generator_names: Sequence[str],
     start_orientation: Orientation,
     target: TargetMetrics,
-    config: AimConfig,
+    client: JavaMinerClient,
     angular_step_deg: float,
 ) -> list[GeneratedPath]:
-    paths = []
-    for name in generator_names:
-        generator = GENERATORS[name]
-        paths.append(
-            GeneratedPath(
-                name=name,
-                points=generator(
-                    start_orientation,
-                    target,
-                    config,
-                    angular_step_deg,
-                ),
-            )
-        )
-    return paths
+    return [GeneratedPath(name, client.generate(
+        start_orientation, target, angular_step_deg, model=name
+    ).points) for name in generator_names]
 
 
 FEATURE_NAMES = COMPARISON_FEATURE_NAMES
@@ -254,7 +189,7 @@ FEATURE_NAMES = COMPARISON_FEATURE_NAMES
 def compute_features_for_generator(
     path: GeneratedPath,
     target: TargetMetrics,
-    config: AimConfig,
+    config: SimpleNamespace,
     angular_step_deg: float,
 ) -> AimPathFeatures:
     if path.name == "sigmadrift":
@@ -300,7 +235,7 @@ def format_feature_value(value: float | int) -> str:
 def print_summary(
     paths: Sequence[GeneratedPath],
     target: TargetMetrics,
-    config: AimConfig,
+    config: SimpleNamespace,
     angular_step_deg: float,
     reference_summaries: Sequence[ReferenceSummary],
 ) -> None:
@@ -367,7 +302,7 @@ def print_summary(
 def plot_paths(
     paths: Sequence[GeneratedPath],
     target: TargetMetrics,
-    config: AimConfig,
+    config: SimpleNamespace,
     angular_step_deg: float,
     reference_summaries: Sequence[ReferenceSummary],
     *,
@@ -514,7 +449,6 @@ def plot_paths(
 
 def main() -> None:
     args = parse_args()
-    config = load_aim_config(args.config)
     target = TargetMetrics(
         yaw=args.target_yaw,
         pitch=args.target_pitch,
@@ -523,13 +457,12 @@ def main() -> None:
         distance=args.distance,
     )
     generator_names = args.generator if args.generator is not None else sorted(GENERATORS)
-    paths = generate_paths(
-        generator_names,
-        (args.start_yaw, args.start_pitch),
-        target,
-        config,
-        args.angular_step_deg,
-    )
+    with JavaMinerClient(config_path=args.config) as client:
+        config = client.config
+        paths = generate_paths(
+            generator_names, (args.start_yaw, args.start_pitch), target,
+            client, args.angular_step_deg,
+        )
     reference_summaries = tuple(
         load_reference_summary(path)
         for path in (args.reference_summary or ())

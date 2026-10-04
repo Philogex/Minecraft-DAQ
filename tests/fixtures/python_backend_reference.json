@@ -1,0 +1,858 @@
+{
+  "provenance": {
+    "interface": "original Python binding, defaults, seed UINT64_MAX",
+    "binding_sha256": "c02afd873f4edd6344e5cb19ca83ef945d5c699bfe697226bef36cc291770007",
+    "platform": "Linux/libstdc++"
+  },
+  "recorded": {
+    "event": {
+      "session_id": "java-migration-reference",
+      "event_id": 1,
+      "event_time_ns": 1000000000,
+      "target_x": 0,
+      "target_y": 0,
+      "target_z": 1,
+      "face_id": "north",
+      "hit_x": 0.5,
+      "hit_y": 0.5,
+      "hit_z": 1.0,
+      "block_state_before": "minecraft:diamond_ore",
+      "block_state_after": "minecraft:air",
+      "neighbors": [],
+      "start_time_ns": null,
+      "destroy_progress_per_tick": null,
+      "expected_break_ticks": null,
+      "world_snapshot": null
+    },
+    "state_samples": [
+      {
+        "relative_ms": 0.0,
+        "yaw": 100.0,
+        "pitch": -5.0,
+        "player_x": 0.5,
+        "player_y": -1.12,
+        "player_z": 0.5,
+        "fov": 70.0,
+        "gui_scale": 2,
+        "fps_estimate": 120.0,
+        "sensitivity": 0.5
+      }
+    ],
+    "mouse_samples": []
+  },
+  "models": {
+    "minimum_jerk": {
+      "case": {
+        "source_session_id": "java-migration-reference",
+        "source_event": {
+          "session_id": "java-migration-reference",
+          "event_id": 1,
+          "event_time_ns": 1000000000,
+          "target_x": 0,
+          "target_y": 0,
+          "target_z": 1,
+          "face_id": "north",
+          "hit_x": 0.5,
+          "hit_y": 0.5,
+          "hit_z": 1.0,
+          "block_state_before": "minecraft:diamond_ore",
+          "block_state_after": "minecraft:air",
+          "neighbors": [],
+          "start_time_ns": null,
+          "destroy_progress_per_tick": null,
+          "expected_break_ticks": null,
+          "world_snapshot": null
+        },
+        "start_sample": {
+          "relative_ms": 0.0,
+          "yaw": 100.0,
+          "pitch": -5.0,
+          "player_x": 0.5,
+          "player_y": -1.12,
+          "player_z": 0.5,
+          "fov": 70.0,
+          "gui_scale": 2,
+          "fps_estimate": 120.0,
+          "sensitivity": 0.5
+        },
+        "target": {
+          "yaw": -0.0,
+          "pitch": -0.0,
+          "width_yaw": 90.0,
+          "width_pitch": 70.52877936550931,
+          "distance": 0.5,
+          "width_source": "local_26_neighbor_reconstruction"
+        },
+        "effective_width": 90.0,
+        "visible_components": [
+          [
+            [
+              -0.5773502691896258,
+              -0.5773502691896258,
+              0.5773502691896258
+            ],
+            [
+              0.5773502691896258,
+              -0.5773502691896258,
+              0.5773502691896258
+            ],
+            [
+              0.5773502691896258,
+              0.5773502691896258,
+              0.5773502691896258
+            ],
+            [
+              -0.5773502691896258,
+              0.5773502691896258,
+              0.5773502691896258
+            ]
+          ]
+        ],
+        "angular_step_deg": 0.15,
+        "start_source": "window_first_sample",
+        "eye_position": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "start_inside_target_region": false
+      },
+      "points": [
+        {
+          "yaw": 100.0,
+          "pitch": -5.0,
+          "t_ms": 0.0
+        },
+        {
+          "yaw": 0.0,
+          "pitch": -0.0,
+          "t_ms": 198.68458242422847
+        }
+      ],
+      "diagnostics": {},
+      "endpoint_hit": {
+        "status": "hit",
+        "geometry_source": "full_cube_aabb",
+        "face_id": "north",
+        "hit_x": 0.5,
+        "hit_y": 0.5,
+        "hit_z": 1.0
+      },
+      "config": {
+        "aim_model": "minimum_jerk",
+        "fallback_angular_step_deg": 0.15,
+        "minimum_jerk": {
+          "fitts_a_ms": 80.0,
+          "fitts_b_ms": 110.0,
+          "min_duration_ms": 60.0,
+          "max_duration_ms": 450.0,
+          "sample_hz": 120,
+          "correction_probability": 0.6,
+          "max_corrections": 1
+        },
+        "sigmadrift": {
+          "fitts_a": 50.0,
+          "fitts_b": 150.0,
+          "target_width": 20.0,
+          "undershoot_min": 0.92,
+          "undershoot_max": 0.97,
+          "peak_time_ratio": 0.35,
+          "primary_sigma_min": 0.18,
+          "primary_sigma_max": 0.28,
+          "overshoot_prob": 0.15,
+          "overshoot_min": 1.02,
+          "overshoot_max": 1.08,
+          "correction_sigma_min": 0.12,
+          "correction_sigma_max": 0.2,
+          "second_correction_prob": 0.25,
+          "curvature_scale": 0.025,
+          "ou_theta": 3.5,
+          "ou_sigma": 1.2,
+          "tremor_freq_min": 8.0,
+          "tremor_freq_max": 12.0,
+          "tremor_amp_min": 0.15,
+          "tremor_amp_max": 0.55,
+          "sdn_k": 0.04,
+          "sample_dt_mean": 7.8,
+          "gamma_shape": 3.5
+        },
+        "geometry_feedback_sigmadrift": {
+          "feedback_latency_mean_ms": 100.0,
+          "feedback_latency_stddev_ms": 15.0,
+          "feedback_latency_min_ms": 60.0,
+          "feedback_latency_max_ms": 160.0,
+          "undershoot_width_min": 0.05,
+          "undershoot_width_max": 0.25,
+          "overshoot_width_min": 0.05,
+          "overshoot_width_max": 0.25,
+          "feedback_position_uncertainty_steps": 0.25,
+          "safe_margin_steps": 1.0,
+          "max_corrections": 3
+        }
+      }
+    },
+    "sigmadrift": {
+      "case": {
+        "source_session_id": "java-migration-reference",
+        "source_event": {
+          "session_id": "java-migration-reference",
+          "event_id": 1,
+          "event_time_ns": 1000000000,
+          "target_x": 0,
+          "target_y": 0,
+          "target_z": 1,
+          "face_id": "north",
+          "hit_x": 0.5,
+          "hit_y": 0.5,
+          "hit_z": 1.0,
+          "block_state_before": "minecraft:diamond_ore",
+          "block_state_after": "minecraft:air",
+          "neighbors": [],
+          "start_time_ns": null,
+          "destroy_progress_per_tick": null,
+          "expected_break_ticks": null,
+          "world_snapshot": null
+        },
+        "start_sample": {
+          "relative_ms": 0.0,
+          "yaw": 100.0,
+          "pitch": -5.0,
+          "player_x": 0.5,
+          "player_y": -1.12,
+          "player_z": 0.5,
+          "fov": 70.0,
+          "gui_scale": 2,
+          "fps_estimate": 120.0,
+          "sensitivity": 0.5
+        },
+        "target": {
+          "yaw": -0.0,
+          "pitch": -0.0,
+          "width_yaw": 90.0,
+          "width_pitch": 70.52877936550931,
+          "distance": 0.5,
+          "width_source": "local_26_neighbor_reconstruction"
+        },
+        "effective_width": 90.0,
+        "visible_components": [
+          [
+            [
+              -0.5773502691896258,
+              -0.5773502691896258,
+              0.5773502691896258
+            ],
+            [
+              0.5773502691896258,
+              -0.5773502691896258,
+              0.5773502691896258
+            ],
+            [
+              0.5773502691896258,
+              0.5773502691896258,
+              0.5773502691896258
+            ],
+            [
+              -0.5773502691896258,
+              0.5773502691896258,
+              0.5773502691896258
+            ]
+          ]
+        ],
+        "angular_step_deg": 0.15,
+        "start_source": "window_first_sample",
+        "eye_position": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "start_inside_target_region": false
+      },
+      "points": [
+        {
+          "yaw": 100.0,
+          "pitch": -5.0,
+          "t_ms": 0.0
+        },
+        {
+          "yaw": 99.96025085449219,
+          "pitch": -4.971312522888184,
+          "t_ms": 3.445842815007059
+        },
+        {
+          "yaw": 99.97077178955078,
+          "pitch": -4.9631218910217285,
+          "t_ms": 16.442753038779685
+        },
+        {
+          "yaw": 99.99588775634766,
+          "pitch": -4.944408893585205,
+          "t_ms": 21.316293890324015
+        },
+        {
+          "yaw": 99.94489288330078,
+          "pitch": -4.9722418785095215,
+          "t_ms": 38.35593923937978
+        },
+        {
+          "yaw": 99.59255981445312,
+          "pitch": -4.957253932952881,
+          "t_ms": 43.882164542182366
+        },
+        {
+          "yaw": 97.54680633544922,
+          "pitch": -4.867593288421631,
+          "t_ms": 50.73580444753722
+        },
+        {
+          "yaw": 91.9998550415039,
+          "pitch": -4.579956531524658,
+          "t_ms": 57.14192495292782
+        },
+        {
+          "yaw": 78.13294982910156,
+          "pitch": -3.712195873260498,
+          "t_ms": 65.26647177400116
+        },
+        {
+          "yaw": 62.20290756225586,
+          "pitch": -2.823758125305176,
+          "t_ms": 72.10013758410385
+        },
+        {
+          "yaw": 55.72358322143555,
+          "pitch": -2.4737532138824463,
+          "t_ms": 74.78980279689873
+        },
+        {
+          "yaw": 49.35160827636719,
+          "pitch": -2.2137415409088135,
+          "t_ms": 77.46865826902564
+        },
+        {
+          "yaw": 36.869773864746094,
+          "pitch": -1.6676231622695923,
+          "t_ms": 83.20651037566125
+        },
+        {
+          "yaw": 30.594711303710938,
+          "pitch": -1.397335410118103,
+          "t_ms": 86.54557750193972
+        },
+        {
+          "yaw": 17.462482452392578,
+          "pitch": -0.8806251287460327,
+          "t_ms": 96.31752227492477
+        },
+        {
+          "yaw": 9.915992736816406,
+          "pitch": -0.48254796862602234,
+          "t_ms": 107.45021860304398
+        },
+        {
+          "yaw": 8.705238342285156,
+          "pitch": -0.4246995151042938,
+          "t_ms": 110.59977625632538
+        },
+        {
+          "yaw": 6.380816459655762,
+          "pitch": -0.26392725110054016,
+          "t_ms": 122.49203220686779
+        },
+        {
+          "yaw": 5.794769763946533,
+          "pitch": -0.22387021780014038,
+          "t_ms": 129.90229887895396
+        },
+        {
+          "yaw": 5.60346794128418,
+          "pitch": -0.23257826268672943,
+          "t_ms": 135.06389986997632
+        },
+        {
+          "yaw": 5.405213356018066,
+          "pitch": -0.24463853240013123,
+          "t_ms": 147.3218543661205
+        },
+        {
+          "yaw": 5.393577575683594,
+          "pitch": -0.24199949204921722,
+          "t_ms": 150.79171084265616
+        },
+        {
+          "yaw": 5.393567085266113,
+          "pitch": -0.2652321457862854,
+          "t_ms": 158.04438683430027
+        },
+        {
+          "yaw": 5.374335765838623,
+          "pitch": -0.27539974451065063,
+          "t_ms": 161.09408472421558
+        },
+        {
+          "yaw": 5.276618957519531,
+          "pitch": -0.26946306228637695,
+          "t_ms": 164.84283877303545
+        },
+        {
+          "yaw": 3.604787588119507,
+          "pitch": -0.18819084763526917,
+          "t_ms": 173.0000189339858
+        },
+        {
+          "yaw": 0.9320881366729736,
+          "pitch": -0.07960285991430283,
+          "t_ms": 183.6195081921671
+        },
+        {
+          "yaw": 0.31075769662857056,
+          "pitch": -0.0300005953758955,
+          "t_ms": 190.83958553917208
+        },
+        {
+          "yaw": 0.07608599960803986,
+          "pitch": -0.012866905890405178,
+          "t_ms": 193.1813871981278
+        },
+        {
+          "yaw": -0.07998570799827576,
+          "pitch": -0.020868243649601936,
+          "t_ms": 201.04576924406058
+        },
+        {
+          "yaw": -0.07053244113922119,
+          "pitch": -0.02189743146300316,
+          "t_ms": 203.77367775622318
+        },
+        {
+          "yaw": -0.04075784981250763,
+          "pitch": -0.004696651827543974,
+          "t_ms": 217.5467034901737
+        },
+        {
+          "yaw": -0.022353213280439377,
+          "pitch": 0.01740492507815361,
+          "t_ms": 229.41323803431044
+        },
+        {
+          "yaw": 0.024180743843317032,
+          "pitch": -0.020298508927226067,
+          "t_ms": 243.75546242734535
+        },
+        {
+          "yaw": 0.04112717881798744,
+          "pitch": -0.046592213213443756,
+          "t_ms": 252.2044683659424
+        },
+        {
+          "yaw": 0.0,
+          "pitch": -0.0,
+          "t_ms": 243.95327850897445
+        }
+      ],
+      "diagnostics": {},
+      "endpoint_hit": {
+        "status": "hit",
+        "geometry_source": "full_cube_aabb",
+        "face_id": "north",
+        "hit_x": 0.5,
+        "hit_y": 0.5,
+        "hit_z": 1.0
+      },
+      "config": {
+        "aim_model": "sigmadrift",
+        "fallback_angular_step_deg": 0.15,
+        "minimum_jerk": {
+          "fitts_a_ms": 80.0,
+          "fitts_b_ms": 110.0,
+          "min_duration_ms": 60.0,
+          "max_duration_ms": 450.0,
+          "sample_hz": 120,
+          "correction_probability": 0.6,
+          "max_corrections": 1
+        },
+        "sigmadrift": {
+          "fitts_a": 50.0,
+          "fitts_b": 150.0,
+          "target_width": 20.0,
+          "undershoot_min": 0.92,
+          "undershoot_max": 0.97,
+          "peak_time_ratio": 0.35,
+          "primary_sigma_min": 0.18,
+          "primary_sigma_max": 0.28,
+          "overshoot_prob": 0.15,
+          "overshoot_min": 1.02,
+          "overshoot_max": 1.08,
+          "correction_sigma_min": 0.12,
+          "correction_sigma_max": 0.2,
+          "second_correction_prob": 0.25,
+          "curvature_scale": 0.025,
+          "ou_theta": 3.5,
+          "ou_sigma": 1.2,
+          "tremor_freq_min": 8.0,
+          "tremor_freq_max": 12.0,
+          "tremor_amp_min": 0.15,
+          "tremor_amp_max": 0.55,
+          "sdn_k": 0.04,
+          "sample_dt_mean": 7.8,
+          "gamma_shape": 3.5
+        },
+        "geometry_feedback_sigmadrift": {
+          "feedback_latency_mean_ms": 100.0,
+          "feedback_latency_stddev_ms": 15.0,
+          "feedback_latency_min_ms": 60.0,
+          "feedback_latency_max_ms": 160.0,
+          "undershoot_width_min": 0.05,
+          "undershoot_width_max": 0.25,
+          "overshoot_width_min": 0.05,
+          "overshoot_width_max": 0.25,
+          "feedback_position_uncertainty_steps": 0.25,
+          "safe_margin_steps": 1.0,
+          "max_corrections": 3
+        }
+      }
+    },
+    "geometry_feedback_sigmadrift": {
+      "case": {
+        "source_session_id": "java-migration-reference",
+        "source_event": {
+          "session_id": "java-migration-reference",
+          "event_id": 1,
+          "event_time_ns": 1000000000,
+          "target_x": 0,
+          "target_y": 0,
+          "target_z": 1,
+          "face_id": "north",
+          "hit_x": 0.5,
+          "hit_y": 0.5,
+          "hit_z": 1.0,
+          "block_state_before": "minecraft:diamond_ore",
+          "block_state_after": "minecraft:air",
+          "neighbors": [],
+          "start_time_ns": null,
+          "destroy_progress_per_tick": null,
+          "expected_break_ticks": null,
+          "world_snapshot": null
+        },
+        "start_sample": {
+          "relative_ms": 0.0,
+          "yaw": 100.0,
+          "pitch": -5.0,
+          "player_x": 0.5,
+          "player_y": -1.12,
+          "player_z": 0.5,
+          "fov": 70.0,
+          "gui_scale": 2,
+          "fps_estimate": 120.0,
+          "sensitivity": 0.5
+        },
+        "target": {
+          "yaw": -0.0,
+          "pitch": -0.0,
+          "width_yaw": 90.0,
+          "width_pitch": 70.52877936550931,
+          "distance": 0.5,
+          "width_source": "local_26_neighbor_reconstruction"
+        },
+        "effective_width": 90.0,
+        "visible_components": [
+          [
+            [
+              -0.5773502691896258,
+              -0.5773502691896258,
+              0.5773502691896258
+            ],
+            [
+              0.5773502691896258,
+              -0.5773502691896258,
+              0.5773502691896258
+            ],
+            [
+              0.5773502691896258,
+              0.5773502691896258,
+              0.5773502691896258
+            ],
+            [
+              -0.5773502691896258,
+              0.5773502691896258,
+              0.5773502691896258
+            ]
+          ]
+        ],
+        "angular_step_deg": 0.15,
+        "start_source": "window_first_sample",
+        "eye_position": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "start_inside_target_region": false
+      },
+      "points": [
+        {
+          "yaw": 100.0,
+          "pitch": -5.0,
+          "t_ms": 0.0
+        },
+        {
+          "yaw": 100.03961181640625,
+          "pitch": -5.023416519165039,
+          "t_ms": 4.454742627607984
+        },
+        {
+          "yaw": 100.04248809814453,
+          "pitch": -4.941180229187012,
+          "t_ms": 16.363723045831776
+        },
+        {
+          "yaw": 100.01486206054688,
+          "pitch": -4.883130073547363,
+          "t_ms": 24.488269866905114
+        },
+        {
+          "yaw": 99.96544647216797,
+          "pitch": -4.857729434967041,
+          "t_ms": 35.34429610899871
+        },
+        {
+          "yaw": 99.91341400146484,
+          "pitch": -4.8436360359191895,
+          "t_ms": 38.34188667266206
+        },
+        {
+          "yaw": 98.87934112548828,
+          "pitch": -4.841660022735596,
+          "t_ms": 47.7577525164847
+        },
+        {
+          "yaw": 96.45404052734375,
+          "pitch": -4.731284141540527,
+          "t_ms": 52.90909003381926
+        },
+        {
+          "yaw": 87.8731689453125,
+          "pitch": -4.242244243621826,
+          "t_ms": 60.773472079752054
+        },
+        {
+          "yaw": 84.24087524414062,
+          "pitch": -4.183001518249512,
+          "t_ms": 62.936116899740576
+        },
+        {
+          "yaw": 77.60334777832031,
+          "pitch": -3.823585271835327,
+          "t_ms": 66.58036275940012
+        },
+        {
+          "yaw": 64.15547180175781,
+          "pitch": -2.9420933723449707,
+          "t_ms": 72.7973911809767
+        },
+        {
+          "yaw": 41.61189270019531,
+          "pitch": -2.1521971225738525,
+          "t_ms": 83.71964588559455
+        },
+        {
+          "yaw": 33.31304931640625,
+          "pitch": -1.5525928735733032,
+          "t_ms": 88.93422016216378
+        },
+        {
+          "yaw": 28.996482849121094,
+          "pitch": -1.3243259191513062,
+          "t_ms": 92.29523266419993
+        },
+        {
+          "yaw": 17.81040382385254,
+          "pitch": -0.8090131282806396,
+          "t_ms": 108.09456880264067
+        },
+        {
+          "yaw": 16.335813522338867,
+          "pitch": -0.6989004015922546,
+          "t_ms": 113.12527839997611
+        },
+        {
+          "yaw": 15.164920806884766,
+          "pitch": -0.6102709770202637,
+          "t_ms": 119.83340528582833
+        },
+        {
+          "yaw": 14.499856948852539,
+          "pitch": -0.5794808268547058,
+          "t_ms": 126.93015949620991
+        },
+        {
+          "yaw": 14.219593048095703,
+          "pitch": -0.5683528184890747,
+          "t_ms": 132.26115397510895
+        },
+        {
+          "yaw": 13.955184936523438,
+          "pitch": -0.6426293849945068,
+          "t_ms": 145.94995750607168
+        },
+        {
+          "yaw": 13.90295696258545,
+          "pitch": -0.6808928847312927,
+          "t_ms": 152.8083591734375
+        },
+        {
+          "yaw": 13.925628662109375,
+          "pitch": -0.725307285785675,
+          "t_ms": 162.3494328493428
+        },
+        {
+          "yaw": 13.935114860534668,
+          "pitch": -0.7330284714698792,
+          "t_ms": 164.3494328493428
+        },
+        {
+          "yaw": 13.956287384033203,
+          "pitch": -0.7149209976196289,
+          "t_ms": 168.43389098389318
+        },
+        {
+          "yaw": 13.956582069396973,
+          "pitch": -0.7126405239105225,
+          "t_ms": 168.50768857838872
+        },
+        {
+          "yaw": 13.972207069396973,
+          "pitch": -0.697228729724884,
+          "t_ms": 174.20184805262718
+        },
+        {
+          "yaw": 13.990270614624023,
+          "pitch": -0.6506251692771912,
+          "t_ms": 183.73436076898668
+        },
+        {
+          "yaw": 13.989487648010254,
+          "pitch": -0.6321792602539062,
+          "t_ms": 189.34580028769645
+        },
+        {
+          "yaw": 13.95048713684082,
+          "pitch": -0.5880405902862549,
+          "t_ms": 197.70561565883054
+        },
+        {
+          "yaw": 13.897679328918457,
+          "pitch": -0.6364859342575073,
+          "t_ms": 214.76338125322442
+        },
+        {
+          "yaw": 13.860954284667969,
+          "pitch": -0.7016005516052246,
+          "t_ms": 225.6233820598829
+        },
+        {
+          "yaw": 13.84921932220459,
+          "pitch": -0.7467756271362305,
+          "t_ms": 232.21515785116247
+        },
+        {
+          "yaw": 13.875227928161621,
+          "pitch": -0.78138267993927,
+          "t_ms": 237.03553761925002
+        },
+        {
+          "yaw": 13.89622974395752,
+          "pitch": -0.8040687441825867,
+          "t_ms": 243.82221650155117
+        }
+      ],
+      "diagnostics": {
+        "motor_target_yaw": 0.0,
+        "motor_target_pitch": 0.0,
+        "applied_margin_steps": 1.0,
+        "anchor_component_index": 0,
+        "directional_width_steps": 600.5996328347729,
+        "s_enter_steps": 367.1996633993065,
+        "s_anchor_steps": 667.4994798166929,
+        "s_exit_steps": 967.7992962340794,
+        "primary_endpoint_steps": 574.4781389857881,
+        "first_feedback_observation_ms": 72.7973911809767,
+        "first_feedback_latency_ms": 95.71029739741202,
+        "first_feedback_application_ms": 168.50768857838872,
+        "first_predicted_terminal_x_steps": -573.4103894627775,
+        "first_predicted_terminal_y_steps": 29.614477790007314,
+        "first_prediction_sigma_major_steps": 0.8114790522866205,
+        "first_prediction_sigma_minor_steps": 0.6287305558280265,
+        "feedback_check_count": 1,
+        "unsafe_prediction_count": 0,
+        "correction_count": 0,
+        "first_visible_entry_ms": 83.71964588559455,
+        "first_safe_entry_ms": 83.71964588559455,
+        "visible_entry_count": 1,
+        "visible_exit_count": 0,
+        "safe_entry_count": 1,
+        "safe_exit_count": 0,
+        "final_visible": true,
+        "final_safe": true
+      },
+      "endpoint_hit": {
+        "status": "hit",
+        "geometry_source": "full_cube_aabb",
+        "face_id": "north",
+        "hit_x": 0.37629742583322534,
+        "hit_y": 0.5072288562624232,
+        "hit_z": 1.0
+      },
+      "config": {
+        "aim_model": "geometry_feedback_sigmadrift",
+        "fallback_angular_step_deg": 0.15,
+        "minimum_jerk": {
+          "fitts_a_ms": 80.0,
+          "fitts_b_ms": 110.0,
+          "min_duration_ms": 60.0,
+          "max_duration_ms": 450.0,
+          "sample_hz": 120,
+          "correction_probability": 0.6,
+          "max_corrections": 1
+        },
+        "sigmadrift": {
+          "fitts_a": 50.0,
+          "fitts_b": 150.0,
+          "target_width": 20.0,
+          "undershoot_min": 0.92,
+          "undershoot_max": 0.97,
+          "peak_time_ratio": 0.35,
+          "primary_sigma_min": 0.18,
+          "primary_sigma_max": 0.28,
+          "overshoot_prob": 0.15,
+          "overshoot_min": 1.02,
+          "overshoot_max": 1.08,
+          "correction_sigma_min": 0.12,
+          "correction_sigma_max": 0.2,
+          "second_correction_prob": 0.25,
+          "curvature_scale": 0.025,
+          "ou_theta": 3.5,
+          "ou_sigma": 1.2,
+          "tremor_freq_min": 8.0,
+          "tremor_freq_max": 12.0,
+          "tremor_amp_min": 0.15,
+          "tremor_amp_max": 0.55,
+          "sdn_k": 0.04,
+          "sample_dt_mean": 7.8,
+          "gamma_shape": 3.5
+        },
+        "geometry_feedback_sigmadrift": {
+          "feedback_latency_mean_ms": 100.0,
+          "feedback_latency_stddev_ms": 15.0,
+          "feedback_latency_min_ms": 60.0,
+          "feedback_latency_max_ms": 160.0,
+          "undershoot_width_min": 0.05,
+          "undershoot_width_max": 0.25,
+          "overshoot_width_min": 0.05,
+          "overshoot_width_max": 0.25,
+          "feedback_position_uncertainty_steps": 0.25,
+          "safe_margin_steps": 1.0,
+          "max_corrections": 3
+        }
+      }
+    }
+  }
+}

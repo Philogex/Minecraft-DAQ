@@ -1,13 +1,11 @@
-"""Minescript-Miner backend for paired generated trajectory datasets."""
+"""Java/JNI Miner backend for paired generated trajectory datasets."""
 
 from __future__ import annotations
 
-import importlib.metadata
 import math
-from array import array
-from dataclasses import asdict, replace
 from pathlib import Path
 
+from analysis.java_miner_client import JavaMinerClient, TargetMetrics
 from analysis.mining_session import RecordedMiningEvent, StateSample
 from analysis.path_dataset import (
     GenerationCase,
@@ -27,53 +25,35 @@ class GenerationCaseError(ValueError):
         self.reason = reason
 
 
-class MinescriptMinerBackend:
-    """Adapter around the installed Minescript-Miner Python/native package."""
+class JavaMinerBackend:
+    """DAQ reconstruction and feature context around the headless Java Miner API."""
 
     def __init__(self, generator: str, config_path: Path | None = None):
-        try:
-            from minescript_miner import aim
-            from minescript_miner.adapter.catalog_contract import MAX_CUBE_SIDE
-            from minescript_miner.adapter.native_bridge import (
-                TargetMetrics,
-                acquire_target_metrics,
-            )
-            from minescript_miner.adapter.shape_catalog import (
-                DEFAULT_CATALOG,
-                SHAPE_ID_BY_NAME,
-            )
-        except ImportError as error:
-            raise RuntimeError(
-                "Minescript-Miner is not importable; install its wheel or use "
-                "`python -m pip install -e /path/to/Minescript-Miner`"
-            ) from error
-
-        if generator not in aim.IMPLEMENTED_AIM_MODELS:
-            raise ValueError(f"unsupported Minescript-Miner generator: {generator}")
-        loaded_config = aim.load_aim_config(config_path) if config_path else aim.AimConfig()
-        self.config = replace(loaded_config, aim_model=generator)
+        self._client = JavaMinerClient(generator, config_path)
+        self.config = self._client.config
         self.generator = generator
-        self._aim = aim
-        self._TargetMetrics = TargetMetrics
-        self._acquire_target_metrics = acquire_target_metrics
-        self._catalog = DEFAULT_CATALOG
-        self._full_cube_shape_id = SHAPE_ID_BY_NAME["full_cube"]
-        self._max_cube_side = MAX_CUBE_SIDE
+        self._full_cube_shape_id = self._client.full_cube_shape_id
+        self._max_cube_side = self._client.max_cube_side
 
     @property
     def config_metadata(self) -> dict[str, object]:
-        return asdict(self.config)
+        return self._client.config_metadata
 
     @property
     def backend_metadata(self) -> dict[str, object]:
-        try:
-            version = importlib.metadata.version("minescript-miner")
-        except importlib.metadata.PackageNotFoundError:
-            version = "development"
-        return {"package": "minescript-miner", "version": version}
+        return self._client.backend_metadata
 
     def angular_step_deg(self, sensitivity: float) -> float:
-        return self._aim.sensitivity_to_angular_step_deg(sensitivity)
+        return self._client.angular_step_deg(sensitivity)
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
 
     @staticmethod
     def _target_orientation(
@@ -253,7 +233,6 @@ class MinescriptMinerBackend:
         if target_index is None:
             raise GenerationCaseError("target_outside_solver_range", "target is outside cube")
         block_states[target_index] = event.block_state_before
-        neighbor_states: list[tuple[int, int, int, str]] = []
         for neighbor in event.neighbors:
             try:
                 dx = int(neighbor["dx"])
@@ -272,26 +251,20 @@ class MinescriptMinerBackend:
             index = block_index(position)
             if index is not None and not use_snapshot:
                 block_states[index] = state
-            neighbor_states.append((dx, dy, dz, state))
 
-        encoded = self._catalog.encode_region(side, block_states)
-        reconstructed = self._acquire_target_metrics(
-            eye,
-            target_orientation,
-            encoded.shape_catalog_version,
-            encoded.side,
+        reconstructed = self._client.acquire(
+            eye, target_orientation, side,
             self._farthest_target_corner_distance(eye, target_block),
-            encoded.shape_ids,
-            array("H", [target_index]),
+            block_states, [target_index],
         )
         if reconstructed is None:
             raise GenerationCaseError(
                 "local_target_not_visible", "local reconstruction found no visible target"
             )
 
-        angular_step = self._aim.sensitivity_to_angular_step_deg(start.sensitivity)
+        angular_step = self.angular_step_deg(start.sensitivity)
         distance = math.dist(eye, hit)
-        target_metrics = self._TargetMetrics(
+        target_metrics = TargetMetrics(
             yaw=target_orientation[0],
             pitch=target_orientation[1],
             width_yaw=reconstructed.width_yaw,
@@ -300,8 +273,6 @@ class MinescriptMinerBackend:
             target_block=target_block,
             face_id=event.face_id,
             hit_point=hit,
-            block_state_before=event.block_state_before,
-            neighbors=tuple(neighbor_states),
             effective_width=reconstructed.effective_width,
             visible_components=reconstructed.visible_components,
         )
@@ -336,7 +307,7 @@ class MinescriptMinerBackend:
         replicate_count: int,
         seed: int,
     ) -> GeneratedTrajectory:
-        target = self._TargetMetrics(
+        target = TargetMetrics(
             yaw=case.target.yaw,
             pitch=case.target.pitch,
             width_yaw=case.target.width_yaw,
@@ -345,11 +316,10 @@ class MinescriptMinerBackend:
             effective_width=case.effective_width,
             visible_components=case.visible_components,
         )
-        generation = self._aim.generate_aim_path_with_diagnostics(
+        generation = self._client.generate(
             (case.start_sample.yaw, case.start_sample.pitch),
             target,
-            self.config,
-            angular_step_deg=case.angular_step_deg,
+            step=case.angular_step_deg,
             seed=seed,
         )
         points = generation.points
@@ -358,7 +328,7 @@ class MinescriptMinerBackend:
                 "generator_rejected_target_region",
                 "path generator rejected the reconstructed target region",
             )
-        target_shape_id = self._catalog.shape_id(
+        target_shape_id = self._client.shape_id(
             case.source_event.block_state_before
         )
         if target_shape_id == self._full_cube_shape_id:
@@ -384,10 +354,6 @@ class MinescriptMinerBackend:
             replicate_count=replicate_count,
             seed=seed,
             points=tuple(PathPoint(point.yaw, point.pitch, point.t_ms) for point in points),
-            diagnostics=(
-                asdict(generation.diagnostics)
-                if generation.diagnostics is not None
-                else {}
-            ),
+            diagnostics=generation.diagnostics,
             endpoint_hit=endpoint_hit,
         )

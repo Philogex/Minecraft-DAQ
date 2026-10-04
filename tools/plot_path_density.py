@@ -19,7 +19,7 @@ if project_root not in sys.path:
 
 from analysis.aim_features import AimPoint
 from analysis.dataset_groups import add_dataset_arguments, resolve_dataset_groups
-from analysis.minescript_miner_backend import GenerationCaseError, MinescriptMinerBackend
+from analysis.java_miner_backend import GenerationCaseError, JavaMinerBackend
 from analysis.mining_context import (
     DEFAULT_BREAK_TICK_EDGES,
     DEFAULT_MAX_BREAK_DELAY_RATIO,
@@ -228,7 +228,7 @@ def _record_from_generated(
 
 def _records_for_session(
     session: MiningSession,
-    backend: MinescriptMinerBackend,
+    backend: JavaMinerBackend,
     *,
     eye_height: float,
     segmentation_config: MovementSegmentationConfig | None = None,
@@ -676,7 +676,7 @@ def main() -> None:
         raise SystemExit("break delay ratio bounds must be finite and ordered")
 
     groups = resolve_dataset_groups(args.sessions, args.labels, args.dataset)
-    backend = MinescriptMinerBackend("sigmadrift", args.config)
+    backend = JavaMinerBackend("sigmadrift", args.config)
     segmentation_config = None
     if not args.no_segmentation:
         segmentation_config = MovementSegmentationConfig(

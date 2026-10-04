@@ -16,7 +16,7 @@ project_root = str(PROJECT_ROOT)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from analysis.minescript_miner_backend import MinescriptMinerBackend
+from analysis.java_miner_backend import JavaMinerBackend
 from analysis.mining_context import parse_break_tick_edges
 from analysis.dataset_groups import add_dataset_arguments, resolve_dataset_groups
 from analysis.mining_session import load_mining_session
@@ -318,7 +318,7 @@ def main() -> None:
         raise SystemExit("break delay ratio bounds must be finite and ordered")
 
     groups = resolve_dataset_groups(args.sessions, args.labels, args.dataset)
-    backend = MinescriptMinerBackend("sigmadrift", args.config)
+    backend = JavaMinerBackend("sigmadrift", args.config)
     segmentation_config = None
     if not args.no_segmentation:
         segmentation_config = MovementSegmentationConfig(

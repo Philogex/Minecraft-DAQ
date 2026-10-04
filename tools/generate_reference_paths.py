@@ -16,7 +16,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from analysis.aim_features import AimPoint
-from analysis.minescript_miner_backend import GenerationCaseError, MinescriptMinerBackend
+from analysis.java_miner_backend import GenerationCaseError, JavaMinerBackend
 from analysis.mining_context import state_sample_at_break_start
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import (
@@ -60,7 +60,7 @@ def main() -> None:
         raise SystemExit("--max-events must be non-negative")
 
     session = load_mining_session(args.session)
-    backend = MinescriptMinerBackend(args.generator, args.config)
+    backend = JavaMinerBackend(args.generator, args.config)
     skipped: Counter[str] = Counter()
     trajectories = []
     segmentation_config = MovementSegmentationConfig(

@@ -233,8 +233,8 @@ dataset.
 `tools/plot_aim_path.py` visualizes angular velocity, remaining target delta,
 and the same feature table for one or more Minescript-Miner path generators.
 It expects a sibling `Minescript-Miner` checkout by default; set
-`MINESCRIPT_MINER_ROOT` when it lives elsewhere. Plotting additionally needs
-matplotlib.
+`MINESCRIPT_MINER_ROOT` when it lives elsewhere. Build the Miner platform JAR
+first (see below). Plotting additionally needs matplotlib.
 
 ```bash
 python tools/analyze_balabit_mouse.py --dataset ../Mouse-Dynamics-Challenge
@@ -264,7 +264,7 @@ plotters can combine multiple recording directories in memory without changing
 or copying their CSV files. Use one `--dataset` per plotted method or cohort:
 
 ```bash
-PYTHONPATH=../Minescript-Miner/src python tools/plot_path_density.py \
+python tools/plot_path_density.py \
   --dataset Human /recordings/human-1 /recordings/human-2 \
   --dataset SigmaDrift /generated/sigma-1 /generated/sigma-2 \
   --output build/analysis/grouped-path-density.png
@@ -288,7 +288,13 @@ Generated reference datasets condition each path generator on the target
 selected by a human DAQ event. They compare motion generation only: target
 selection is deliberately held constant and is not evaluated by this dataset.
 
-Install a Minescript-Miner wheel in the analysis environment, then run:
+Build the [Miner JAR](../Minescript-Miner/fabric/README.md) with
+`./gradlew build check` in `../Minescript-Miner/fabric`. The Python analysis
+starts a persistent Java 25 process using that JAR's Java/JNI interface;
+Minecraft does not need to be running. No native Python module is required.
+Set `MINECRAFT_MINER_JAR` to select another platform JAR and
+`MINECRAFT_MINER_JAVA` to select its Java executable. Configuration parsing and
+block-state encoding happen in Java. Then run:
 
 ```bash
 python tools/generate_reference_paths.py \
@@ -322,9 +328,8 @@ python tools/plot_feedback_diagnostics.py \
 ```
 
 The adjacent JSON file preserves weighted distributions and summary values.
-Ordinary live path generation does not collect these diagnostics; only the
-analysis-specific generator call performs the additional region membership
-checks for every emitted sample.
+The Java/JNI generator exposes the same diagnostic fields for the live Miner
+and these analysis tools.
 
 By default, the generator detects the final stationary-player movement episode
 inside the recording window and uses its onset as the generated path's initial
@@ -338,7 +343,7 @@ parameters, and skipped-event counts. `--no-segmentation` retains the earlier
 the same target conditions:
 
 ```bash
-PYTHONPATH=../Minescript-Miner/src python tools/plot_path_density.py \
+python tools/plot_path_density.py \
   /path/to/mining-session \
   /path/to/generated-session \
   --label Human \
@@ -350,7 +355,7 @@ Both path- and speed-density tools can instead stratify by Minecraft's expected
 block-break duration:
 
 ```bash
-PYTHONPATH=../Minescript-Miner/src python tools/plot_path_density.py \
+python tools/plot_path_density.py \
   --dataset Human /path/to/schema-v2-session \
   --stratify-by expected-break-duration \
   --break-tick-edges 1,3,6,11,21 \
@@ -405,7 +410,7 @@ segmentation, event weighting, and `W_eff` stratification as the spatial path
 plot:
 
 ```bash
-PYTHONPATH=../Minescript-Miner/src python tools/plot_speed_density.py \
+python tools/plot_speed_density.py \
   /path/to/mining-session \
   /path/to/generated-session \
   --label Human \
@@ -461,7 +466,7 @@ window do not affect this cohort.
 table with weighted, shared-bin histograms and median markers:
 
 ```bash
-PYTHONPATH=../Minescript-Miner/src python tools/plot_feature_distributions.py \
+python tools/plot_feature_distributions.py \
   /path/to/mining-session \
   /path/to/generated-session \
   --label Human \
@@ -536,7 +541,7 @@ click endpoint but no known target width.
 Both external feature references can be added to the same figure:
 
 ```bash
-PYTHONPATH=../Minescript-Miner/src python tools/plot_feature_distributions.py \
+python tools/plot_feature_distributions.py \
   /path/to/mining-session \
   /path/to/generated-session \
   --label Human \
@@ -562,7 +567,7 @@ only the end of the observed motion run.
 Minecraft degrees and Balabit pixels:
 
 ```bash
-PYTHONPATH=../Minescript-Miner/src python tools/plot_motion_reference.py \
+python tools/plot_motion_reference.py \
   /path/to/mining-session \
   /path/to/generated-session \
   --label Human \
@@ -620,7 +625,7 @@ preprocessing from changing the compared face or target-condition mixture.
 episode directly after the previous one:
 
 ```bash
-PYTHONPATH=../Minescript-Miner/src python tools/plot_concatenated_timeline.py \
+python tools/plot_concatenated_timeline.py \
   /path/to/mining-session \
   /path/to/generated-session \
   --label Human \
@@ -640,3 +645,14 @@ correction phases, and generator resets that aggregate density plots can hide.
 The project should stay task-oriented, but only mining is planned for the first
 implementation. Future data tasks may include movement, pathing, combat, or
 general interaction datasets.
+
+### Analysis interface checks
+
+After building the Miner JAR, run `python -m unittest discover -s tests -v`.
+The tests exercise the Python-to-Java transport, catalog/configuration access,
+all three generators with uint64 seeds, snapshot reconstruction, error recovery
+and generated dataset round trips. Linux also compares complete results with
+frozen output from the original Python binding. JAR and catalog hashes, Java
+version and platform are recorded in generated dataset metadata.
+CI builds the Miner interface from `Philogex/Minescript-Miner`'s default branch
+before running these checks; publish the matching Miner changes first.

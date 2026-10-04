@@ -24,7 +24,7 @@ from analysis.aim_features import (
     compute_aim_path_features,
 )
 from analysis.dataset_groups import add_dataset_arguments, resolve_dataset_groups
-from analysis.minescript_miner_backend import MinescriptMinerBackend
+from analysis.java_miner_backend import JavaMinerBackend
 from analysis.mining_session import load_mining_session
 from analysis.movement_segmentation import MovementSegmentationConfig
 from analysis.path_density import AlignedPath, align_paths, weighted_quantile
@@ -358,7 +358,7 @@ def main() -> None:
         raise SystemExit("break delay ratio bounds must be finite and ordered")
 
     groups = resolve_dataset_groups(args.sessions, args.labels, args.dataset)
-    backend = MinescriptMinerBackend("sigmadrift", args.config)
+    backend = JavaMinerBackend("sigmadrift", args.config)
     fitts_a_ms = (
         args.fitts_a_ms
         if args.fitts_a_ms is not None

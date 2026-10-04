@@ -21,9 +21,8 @@ The mod uses Fabric Loom and keeps all version pins in `gradle.properties`.
 ./gradlew build
 ```
 
-The initial target version is Minecraft `26.2` with Fabric Loader `0.19.3`.
-If a test instance uses a different version, change `minecraft_version` and
-`loader_version` in `gradle.properties`.
+The target version is Minecraft `26.3` with Fabric Loader `0.19.5` or newer,
+Fabric API `0.161.0+26.3` and Java `25`, matching the Miner mod.
 
 Minecraft `26.1` and newer are shipped unobfuscated. The build therefore uses
 the `net.fabricmc.fabric-loom` plugin id for non-obfuscated Minecraft versions
